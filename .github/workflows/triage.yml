@@ -31,4 +31,7 @@ jobs:
           TRIAGE_URL: ${{ vars.TRIAGE_URL }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_JSON: ${{ toJson(github.event.issue) }}
-        run: pnpm tsx scripts/auto-triage.ts
+        # .mts: root package.json is CJS (no "type": "module"); tsx picks the
+        # module format from the nearest package.json, so ESM syntax needs the
+        # .mts extension — caught in CI by a Top-level await TransformError.
+        run: pnpm tsx scripts/auto-triage.mts

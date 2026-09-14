@@ -26,10 +26,13 @@ if (!REPO || !TRIAGE_URL || !ISSUE_JSON) {
 }
 const issue = JSON.parse(ISSUE_JSON) as IssuePayload;
 
+// GH_REPO over the --repo flag: gh api doesn't accept --repo, while every gh
+// subcommand honors the environment variable.
 function gh(args: string[], input?: string): string {
-  return execFileSync("gh", [...args, "--repo", REPO], {
+  return execFileSync("gh", args, {
     encoding: "utf8",
     input,
+    env: { ...process.env, GH_REPO: REPO },
     maxBuffer: 10 * 1024 * 1024,
   });
 }
