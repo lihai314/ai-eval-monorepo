@@ -46,16 +46,21 @@ jobs:
 
       - name: Deploy
         id: deploy
-        env:
-          GIT_SHA: ${{ github.sha }}
-          GIT_BRANCH: main
         run: |
-          set -euo pipefail
-          URL=$(npx --yes vercel@latest deploy --prod --yes \
-            --token "${{ secrets.VERCEL_TOKEN }}" 2>vercel-build.log | tail -1)
+          set -uo pipefail
+          npx --yes vercel@latest deploy --prod --yes \
+            --build-env "GIT_SHA=${{ github.sha }}" --build-env GIT_BRANCH=main \
+            --token "${{ secrets.VERCEL_TOKEN }}" >vercel-out.log 2>vercel-err.log
+          deploy_status=$?
+          cat vercel-out.log
+          cat vercel-err.log >&2
+          URL=$(tail -1 vercel-out.log)
+          if [ "$deploy_status" -ne 0 ]; then
+            echo "::error::vercel deploy exited $deploy_status — see build log above"
+            exit 1
+          fi
           if [[ ! "$URL" =~ vercel\.app$ ]]; then
-            cat vercel-build.log
-            echo "::error::unexpected vercel deploy output: $URL"
+            echo "::error::unexpected vercel deploy output: [$URL]"
             exit 1
           fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
