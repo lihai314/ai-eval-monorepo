@@ -1,0 +1,34 @@
+name: Triage Issue
+
+# Automatic Issue (dogfood): every new issue is classified by the agent
+# running on the *deployed* production build — the same artifact the pipeline
+# just released, not a local copy of the code.
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  triage:
+    name: Agent triage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Triage
+        env:
+          REPO: ${{ github.repository }}
+          TRIAGE_URL: ${{ vars.TRIAGE_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_JSON: ${{ toJson(github.event.issue) }}
+        run: pnpm tsx scripts/auto-triage.ts

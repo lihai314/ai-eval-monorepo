@@ -35,7 +35,7 @@ pnpm smoke            # BASE_URL=https://... node scripts/smoke.mjs
 
 | Stage | Where it lives | Trigger |
 | --- | --- | --- |
-| Issue | `.github/ISSUE_TEMPLATE/` | human (Automatic Issue in batch 2) |
+| Issue | `.github/ISSUE_TEMPLATE/` | human (agent now auto-classifies new issues: `triage.yml` → production `/api/triage`) |
 | Branch | `feat/<name>-<issue>` / `fix/<name>-<issue>` | human |
 | PR | `gh pr create` → checks + Vercel preview | human |
 | CI | `.github/workflows/ci.yml`: lint ∥ unit ∥ api → build | PR + push main |
