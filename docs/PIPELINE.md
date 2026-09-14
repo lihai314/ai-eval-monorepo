@@ -11,10 +11,13 @@ GitHub Issue → Branch → Pull Request → CI (lint ∥ unit ∥ api → build
 ## Stage by stage
 
 ### Issue
-- **Runs it**: humans today via `.github/ISSUE_TEMPLATE/` (bug / feature).
-- **Passing means**: work has a number to reference; `Fixes #N` closes it.
-- **Lesson**: issues are the agent's raw dataset — batch 2 "Automatic Issue" closes the loop
-  (monitoring failure → auto-filed issue → agent triages it → its own dogfood dataset).
+- **Runs it**: humans via `.github/ISSUE_TEMPLATE/` (bug / feature); every new issue is then
+  auto-classified by the production agent (`triage.yml` → `scripts/auto-triage.ts` →
+  `TRIAGE_URL/api/triage` → comment + labels). Labels are applied from the repo whitelist only.
+- **Passing means**: work has a number to reference; `Fixes #N` closes it; the agent's verdict
+  lands on the issue within a minute.
+- **Lesson**: agent output is untrusted input — the whitelist boundary in `selectLabels()` is the
+  pattern to copy everywhere. Future "monitoring failure → auto-filed issue" reuses this loop.
 
 ### Branch
 - **Convention**: `feat/<name>-<issue#>` / `fix/<name>-<issue#>` off `main`.
@@ -87,10 +90,12 @@ node scripts/smoke.mjs                                # BASE_URL=... GIT_SHA=...
 
 1. **Agent Evaluation** — `packages/eval` dataset + graders; extra CI job that runs when
    `packages/agent/**/prompt*` or model config changes; gate on regression vs baseline.
+   Dataset seeds itself from live triage verdicts + human label corrections (#5 shipped).
 2. **Trace** — Langfuse wrapper around `LlmClient` (the seam in `packages/agent/src/llm.ts`
    was designed for exactly this: one interface, full observability).
-3. **Automatic Issue** — on smoke/monitor failure, open an issue with run context
-   (`gh issue create` from a workflow).
+3. **Automatic Issue** ✅ triage half — opened issues → production agent → labels + comment
+   (`triage.yml`, #5). Remaining half: on smoke/monitor failure, auto-file an issue with run
+   context (`gh issue create` from a workflow), which then flows through its own triage.
 4. **Nightly Regression** — cron → eval suite + smoke; trend written to Supabase.
 5. **Queue Monitoring** — when triage moves behind a queue (Vercel cron/Blob or Supabase queue):
    depth + oldest-job-age on `/api/health`.
