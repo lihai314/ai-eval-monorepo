@@ -47,11 +47,16 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
-          set -uo pipefail
+          # GitHub's default bash has -e: a non-zero vercel exit would kill
+          # this step *before* the diagnostic cat below. Disable it explicitly.
+          set +e
+          # VERCEL_TOKEN_PROD: vcp_ tokens are project-scoped; production needs
+          # its own (ai-eval-production → Settings → Tokens).
           npx --yes vercel@latest deploy --prod --yes \
             --build-env "GIT_SHA=${{ github.sha }}" --build-env GIT_BRANCH=main \
-            --token "${{ secrets.VERCEL_TOKEN }}" >vercel-out.log 2>vercel-err.log
+            --token "${{ secrets.VERCEL_TOKEN_PROD }}" >vercel-out.log 2>vercel-err.log
           deploy_status=$?
+          set -e
           cat vercel-out.log
           cat vercel-err.log >&2
           URL=$(tail -1 vercel-out.log)
