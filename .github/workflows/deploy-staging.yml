@@ -1,0 +1,63 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-staging
+
+jobs:
+  staging:
+    name: Staging Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bind Vercel project (staging)
+        run: |
+          mkdir -p .vercel
+          printf '{"projectId":"%s","orgId":"%s","projectName":"ai-eval-staging"}' \
+            "${{ secrets.VERCEL_PROJECT_ID_STAGING }}" "${{ vars.VERCEL_ORG_ID }}" \
+            > .vercel/project.json
+
+      - name: Deploy
+        id: deploy
+        env:
+          GIT_SHA: ${{ github.sha }}
+          GIT_BRANCH: main
+        run: |
+          set -euo pipefail
+          URL=$(npx --yes vercel@latest deploy --prod --yes \
+            --token "${{ secrets.VERCEL_TOKEN }}" 2>vercel-build.log | tail -1)
+          if [[ ! "$URL" =~ vercel\.app$ ]]; then
+            cat vercel-build.log
+            echo "::error::unexpected vercel deploy output: $URL"
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "🟡 staging → $URL"
+
+      - name: Smoke
+        env:
+          BASE_URL: ${{ steps.deploy.outputs.url }}
+          GIT_SHA: ${{ github.sha }}
+        run: node scripts/smoke.mjs
+
+      - name: Summary
+        run: |
+          {
+            echo "## Staging Deploy ✅"
+            echo ""
+            echo "- URL: ${{ steps.deploy.outputs.url }}"
+            echo "- Commit: \`${{ github.sha }}\` (${GITHUB_SHA_SHORT})"
+            echo "- Smoke: passed (version + health verified)"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          GITHUB_SHA_SHORT: ${{ github.sha }}
+
+  # From here on, main is "staging-verified". The next step is a manual
+  # Release (workflow_dispatch on release-production.yml).

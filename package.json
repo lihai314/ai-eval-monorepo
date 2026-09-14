@@ -1,0 +1,31 @@
+{
+  "name": "ai-eval-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.33.3",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "smoke": "node scripts/smoke.mjs",
+    "clean": "rm -rf .turbo apps/*/.turbo packages/*/.turbo apps/web/.next"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.1.0",
+    "@types/node": "^22.0.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@biomejs/biome",
+      "esbuild",
+      "next",
+      "sharp"
+    ]
+  }
+}

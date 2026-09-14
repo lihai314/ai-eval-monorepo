@@ -1,0 +1,25 @@
+name: Feature request
+description: Propose new behavior for the agent app or the pipeline
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      placeholder: What is painful or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      placeholder: What should happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      placeholder: A concrete check that says this shipped (endpoint behavior, green gate, dashboard...).
+    validations:
+      required: true
