@@ -50,11 +50,14 @@ Details, failure playbook, and what each stage teaches: **[docs/PIPELINE.md](doc
 
 ## One-time platform setup
 
-1. **Vercel projects** (done for the first boot; recreate with):
-   `vercel project add ai-eval-staging && vercel project add ai-eval-production`
+1. **Vercel projects**: `vercel project add ai-eval-staging && vercel project add ai-eval-production`,
+   then apply settings: `VERCEL_API_TOKEN=... ./scripts/setup-vercel.sh`
+   (rootDirectory=apps/web, turbo build, SSO protection off for smoke access).
 2. **GitHub repo secrets/vars** consumed by the workflows:
-   - `VERCEL_TOKEN` (secret) — vercel.com → Account → Tokens
-   - `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_STAGING`, `VERCEL_PROJECT_ID_PRODUCTION` (secrets/vars — IDs are not sensitive)
+   - `VERCEL_TOKEN` (secret) — a `vcp_` **project** token from ai-eval-staging → Settings → Tokens
+   - `VERCEL_TOKEN_PROD` (secret) — a second `vcp_` token from ai-eval-production → Settings → Tokens
+     (project-scoped tokens can't deploy to the other project — learned the hard way in run 34855756577)
+   - `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_STAGING`, `VERCEL_PROJECT_ID_PRODUCTION` (IDs, not sensitive)
 3. **Branch protection** on `main`: require CI checks (Lint, Unit, API, Build) to pass before merge.
 4. Optional hard gate: add required reviewers to the `production` **environment**
    (Settings → Environments → production), turning "Release" into an approval.

@@ -27,13 +27,14 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
-          set -uo pipefail
-          # --build-env: GIT_SHA/GIT_BRANCH must reach the *cloud build* so the
-          # bundle reports the commit it was built from (smoke asserts this).
+          # GitHub's default bash has -e: a non-zero vercel exit would kill
+          # this step *before* the diagnostic cat below. Disable it explicitly.
+          set +e
           npx --yes vercel@latest deploy --prod --yes \
             --build-env "GIT_SHA=${{ github.sha }}" --build-env GIT_BRANCH=main \
             --token "${{ secrets.VERCEL_TOKEN }}" >vercel-out.log 2>vercel-err.log
           deploy_status=$?
+          set -e
           cat vercel-out.log
           cat vercel-err.log >&2
           URL=$(tail -1 vercel-out.log)
