@@ -7,6 +7,13 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@ai-eval/agent':
+        specifier: workspace:*
+        version: link:packages/agent
+      '@ai-eval/shared':
+        specifier: workspace:*
+        version: link:packages/shared
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.1.0

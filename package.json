@@ -28,5 +28,9 @@
       "next",
       "sharp"
     ]
+  },
+  "dependencies": {
+    "@ai-eval/agent": "workspace:*",
+    "@ai-eval/shared": "workspace:*"
   }
 }
