@@ -1,143 +1,100 @@
-# ai-eval-monorepo 从 0 到 1 落地方案
+# PLAN v2 — eval-hub：Agent 评测平台（产品定义于 2026-09-14 定稿）
 
-> 定位：以「GitHub issue → PR → CI → 部署 → 监控」这条研发链路为骨架，学习 agent 应用开发。
-> 约束：TypeScript 全栈、框架优先（Vercel AI SDK）、只用免费额度、账号已就绪。
+> v1（学习导向的 0→1 路线图）已完成使命，存于 git 历史（b9ab545..e02060a）。
+> 本版是产品计划：**做一个 AI/agent 评测平台，带可视化操作页面**。
+> 已经跑通的基建（pipeline、CI 门禁、双 Vercel 环境、auto-triage 循环）全部保留为地基。
 
 ---
 
-## 1. 产品形态（一条决策，解决所有含糊）
+## 1. 产品定义（一句话）
 
-做一个 **issue-triage agent**（代号 `issue-pilot`），部署在自己的 monorepo 上吃自己的狗粮：
+**eval-hub**：管理"被测 agent → 数据集 → 评测运行 → 分数/趋势/逐条钻取"的可视化操作台，
+第一个被测 agent 是本仓库的 issue-pilot triage agent（dogfooding），
+且生产的真实 triage 流量会回流为评测数据——**平台既是仪表盘，也是数据飞轮本身**。
 
-- 仓库里每新开一个 GitHub issue → agent 自动：**分类 + 打 label + 摘要 + 检索相似历史 issue（pgvector）** → 回帖。
-- 附带一个极简 Web UI：看 triage 历史、重跑、人工点赞/点踩（反馈进 eval 数据集）。
+成功的硬标准：新用户 10 分钟内完成 登录 → 建数据集 → 跑一次 eval → 看懂报告。
 
-为什么是它：
-1. issue 既是触发器又是数据集，研发链路（issue→PR→CI）和产品功能天然咬合，不需要另编一个场景。
-2. 输入输出都是「非结构化 → 结构化」，是学 agent（tool calling、structured output）最典型的形态。
-3. 你的仓库本来就要攒 issue，eval 数据集零成本增长。
+## 2. 架构映射（目标组件 → 在评测平台中的具体职责）
 
-## 2. 技术选型（全部免费额度内）
-
-| 环节 | 选择 | 免费额度依据 |
+| 组件 | 职责 | 免费额度依据 |
 |---|---|---|
-| Monorepo | pnpm workspace + Turborepo | — |
-| Web/后端 | Next.js (App Router) on Vercel | Hobby 计划，个人项目免费 |
-| Agent 框架 | **Vercel AI SDK**（`ai` 包） | 开源；TS 生态里最顺的 tool-calling / streaming / structured output |
-| LLM | Provider 无关，默认 **Gemini**（AI Studio 免费层）；模型名走 env | 免费额度；换 key 即换 OpenAI/智谱等 |
-| Embedding | `text-embedding-004`（Gemini，免费）或 OpenAI small | — |
-| 数据库 | **Supabase**：Postgres + pgvector + Auth（GitHub OAuth） | 免费：500MB DB、2 项目 |
-| ORM/迁移 | Drizzle + drizzle-kit | 轻量、TS-first |
-| 校验 | zod（schema 全放 `packages/shared`，前后端共用） | — |
-| 质量门禁 | Biome（lint+format 一把梭）+ Vitest | — |
-| CI/CD | GitHub Actions（issue 触发 + PR 门禁） | 公开仓库无限；私有 2000 min/月 |
-| LLM 可观测 | **Langfuse Cloud**（trace + score + prompt 版本） | 免费 50k events/月 |
-| 错误监控 | Sentry（Node/Next SDK） | 免费 5k errors/月 |
-| 站点分析/健康检查 | Vercel Analytics + 每日 cron 冒烟测试 | Hobby cron 限每日一次，够用 |
+| **Next.js (apps/web)** | 控制台 UI + `/api/*` 业务后端（runs 编排、auth 会话、数据集 CRUD） | Vercel Hobby（双项目沿用） |
+| **Supabase Auth** | GitHub OAuth 登录（多租户预留） | 50k MAU 免费 |
+| **Supabase PostgreSQL** | 实体表（§3）+ RLS；扩展 `pgmq` 承载队列 | 500MB、激活扩展即用；**兜底**：若 Queues 不可用，普通表 + worker 轮询，接口不变 |
+| **Supabase Storage** | eval 产物：原始 LLM 输出归档、CSV/JSON 报告导出 | 1GB 免费 |
+| **Supabase Edge Functions** | ① GitHub webhook 接收器（issue→enqueue）② **eval 队列消费者**（item 级 worker，重试/节流） | 50 万调用/月 |
+| **GitHub Actions** | 已有 pipeline + 新增：`e2e.yml`（Playwright）、`eval-gate.yml`（prompt 变更触发） | 公开仓库免费 |
+| **Vitest** | 现有 14 测 + eval 逻辑测 | — |
+| **Playwright** | 关键用户流：登录→建数据集→跑 eval→看报告→纠正回流 | — |
+| **Agent Evaluation** | `packages/eval`：**既是产品内核也是 CI 门禁**——dataset schema / graders / runner 一份代码两用 | — |
+| **Sentry** | 错误 + Web Vitals；兼作 OTLP trace 接收端（一套 DSN，不维护两套 trace 系统） | 5k errors/月 |
+| **OpenTelemetry** | 跨边界追踪：API → 队列 → Edge worker → LLM 调用（span 携带 run_id/item_id，报告页可跳转） | Sentry OTLP |
+| **Supabase Logs** | DB + Edge Function 日志排障（`supabase logs`） | 随项目 |
 
-**刻意不选**：LangGraph（TS 生态弱、概念重，框架优先学习阶段是噪音）、Temporal/消息队列（用 Actions + cron 就够）、自托管 Grafana/OTel（免费额度养不起，且会把学习变成运维）。等 P5 之后想加深再换。
+**后端分层铁律**（防两套后端抢活）：同步业务逻辑、DB 事务、需要 Node 生态 → Next.js server routes；
+webhook 入口、队列消费者、边缘低延迟 → Edge Functions。Edge Function 是异步侧，不是主战场。
 
-## 3. 仓库结构
+## 3. 数据模型（v0 schema）
 
-```
-ai-eval-monorepo/
-├─ apps/
-│  └─ web/                 # Next.js：UI + /api/triage + /api/webhooks/github
-├─ packages/
-│  ├─ agent/               # agent 核心：prompts、tools、triageAgent()，纯函数、无框架依赖
-│  ├─ db/                  # drizzle schema + 迁移 + client（issues, triage_runs, eval_runs）
-│  ├─ shared/              # zod schemas、类型、env 校验（唯一配置入口）
-│  ├─ eval/                # ★ 本仓库灵魂：数据集、graders、runner
-│  └─ config/              # tsconfig/biome 共享配置
-├─ .github/
-│  ├─ workflows/
-│  │  ├─ ci.yml            # PR: lint + typecheck + test + build
-│  │  ├─ eval.yml          # prompt/agent 代码变更时跑 eval 门禁
-│  │  └─ triage.yml        # issues: opened → 调 Vercel API → 回帖+打label
-│  ├─ ISSUE_TEMPLATE/      # bug / feature 模板
-│  └─ PULL_REQUEST_TEMPLATE.md
-├─ turbo.json
-├─ pnpm-workspace.yaml
-└─ PLAN.md                 # 本文件
+```sql
+agents        (id, name, version, prompt_hash, model_config jsonb)
+datasets      (id, name, version, source)                  -- version 递增而非原地改
+dataset_items (id, dataset_id, input jsonb, expected jsonb,
+               provenance text)                            -- manual | production | corrected
+eval_runs     (id, agent_id, dataset_id, status, totals jsonb,
+               started_at, finished_at)                    -- queued|running|done|failed
+eval_results  (id, run_id, item_id, output jsonb, scores jsonb,
+               verdict, error, trace_id)                   -- 逐条：pass/fail + 0–5 分
 ```
 
-依赖方向铁律：`agent` 不 import `web`；`web` 和 `eval` 都只依赖 `agent + db + shared`。这保证 eval 能脱离 UI 在 CI 里跑。
+关键决定：**dataset 版本化 + item 携带 provenance**——数据飞轮的地基；eval_results.trace_id 把评测条目挂到 OTel trace。
 
-## 4. 路线图：P0 → P5（每阶段都有「完成判据」）
+## 4. UI 页面（操作台地图）
 
-### P0 · 骨架上线（半天）
-- 初始化 pnpm workspace + Turborepo + Next.js 空应用 + Biome + strict tsconfig。
-- Vercel 连仓库 → 空应用上生产；建 Supabase 项目，跑第一个迁移。
-- GitHub 开仓库 + 首个 commit 即配好 `ci.yml`（lint/build/test 绿灯）。
-- **判据**：浏览器打开 Vercel 域名看到 hello；CI 绿。
-
-### P1 · 第一个 agent 端点（1–2 天）
-- 从第一个「真实 issue」开分支 `feat/triage-api-1`，做 `POST /api/triage`：
-  AI SDK `generateObject` + zod → 返回 `{category, labels[], summary, severity}`；结果写 Supabase。
-- prompts 和 tools 全部放 `packages/agent`，配 Vitest 单测（mock LLM 输出）。
-- 开 PR：preview 部署可访问 → CI 过 → merge → 生产。
-- **判据**：curl 一个 issue 返回结构化结果且库里落了行；你亲手走完一次 issue→PR→deploy。
-
-### P2 · 链路接通 + 狗粮（1–2 天）
-- `triage.yml`：`on: issues.opened` → 用 PAT 调 `/api/triage` → 以 bot 身份回帖 + 打 label。
-- Supabase 启用 pgvector；issue 正文 embedding 入库，triage 时检索 top-3 相似历史 issue 注入 prompt（学 RAG 的最低成本入口）。
-- 给自己仓库的 issue 模板写好，从此每个新功能都从 issue 开始。
-- **判据**：在本仓库开一个测试 issue，1 分钟内收到 agent 回帖和 label。
-
-### P3 · eval 体系（2–3 天，本仓库灵魂）
-- `packages/eval`：
-  - `datasets/triage-v1.jsonl`：30–50 条标注样例（前期用 P2 跑过、人工确认过的真实 issue，零标注成本）。
-  - `graders/`：程序化断言（label ∈ 白名单、summary ≤ N 字）+ **model-graded**（用另一个 LLM 评分类正确性 1–5）。
-  - `runner`：`pnpm eval`，结果写 `eval_runs` 表 + Langfuse score。
-- `eval.yml`：PR 触碰 `packages/agent/prompts/**` 或模型版本时自动跑，回归（均分低于基线）则红。
-- **判据**：故意把 prompt 改坏，PR 被 eval 门禁拦下——这一刻你就懂为什么要 eval。
-
-### P4 · 监控与回滚（1–2 天）
-- Langfuse：agent 每次调用上报 trace（input/output/latency/tokens/cost），与 eval score 关联。
-- Sentry：web + 后台任务错误捕获，release 绑定 commit。
-- Vercel Analytics + 每日 cron 冒烟测试（打 `/api/triage`，失败发 issue 给自己）。
-- 演练：部署一个故意抛错的版本 → 从 Sentry/Langfuse 发现 → Vercel 一键回滚。
-- **判据**：一次「发现→回滚」演练成功，截图贴进相关 issue。
-
-### P5 · 加深（持续，按兴趣挑）
-- 人工反馈闭环：回帖带 👍/👎，反馈自动进 eval 数据集（数据飞轮）。
-- prompt 版本管理（Langfuse prompt API）、多 agent（加一个 "reproduce guidance" agent 给 bug issue 生成复现步骤建议）。
-- 回归趋势 dashboard（从 `eval_runs` 表画曲线）。
-- 想换口味时：把 P1 的 generateObject 换成手写 tool-loop，对比框架帮你做了什么。
-
-## 5. issue → PR 工作流约定（学规范，不搞仪式感）
-
-1. `main` 受保护，只进 PR；每个功能/修复先开 issue（哪怕三行字）。
-2. 分支 `feat/<name>-<issue号>` / `fix/<name>-<issue号>`；PR 描述用模板：改动、验证方式、eval 影响。
-3. 合并前门禁：`ci.yml` 全绿（lint+typecheck+test+build）+ 触碰 agent 代码则 `eval.yml` 全绿。
-4. squash merge，`Fixes #123` 自动关 issue。发布 = 合 main 即 Vercel 生产。
-
-## 6. 免费额度红线（提前知道会撞哪堵墙）
-
-- Vercel Hobby：cron 每日一次、非商用——学习项目 OK，别挂公司流量。
-- Supabase 免费项目 7 天无活动会暂停：每周至少跑一次（cron 冒烟测试顺便保活）。
-- Langfuse 50k events/月：triage 频率低，富余。
-- Gemini 免费层有 RPM 限制：eval 批量跑时加并发=1 的节流。
-- LLM key 全部走 env（`packages/shared` 统一校验），本地 `.env.local`，生产 Vercel env + Actions secrets，永不进 git。
-
-## 7. 开工命令（P0 第一天）
-
-```bash
-cd /Users/lihai/code/zcode/ai-eval-monorepo
-git init -b main
-pnpm init
-# 建 workspace
-printf 'packages:\n  - "apps/*"\n  - "packages/*"\n' > pnpm-workspace.yaml
-mkdir -p apps packages .github/workflows .github/ISSUE_TEMPLATE
-# 用 create-turbo 打底（含 turborepo + next + typescript 全套）
-pnpm dlx create-turbo@latest --package-manager pnpm  # 或手动 apps/web: pnpm dlx create-next-app
-pnpm dlx biome init
-# Supabase
-pnpm add -D supabase && supabase login && supabase init
-# 首个 commit + 远端
-git add . && git commit -m "chore: bootstrap monorepo"
-gh repo create ai-eval-monorepo --public --source=. --push
-# 然后：Vercel import 该仓库；Supabase 建项目；把三个平台的 URL/key 填进 .env.local
+```
+/                       dashboard：分数趋势曲线、最近 runs、待纠正队列
+/datasets  /datasets/:id            items 浏览 + 纠正审核
+/agents    /agents/:id              版本历史 + prompt 快照
+/runs      /runs/new  /runs/:id     触发评测、聚合分 + 逐条表格 + 单条钻取(input/output/expected/score/reason)
+/runs/:a/compare/:b                 版本对比（diff 视图）
+/live                               生产 triage 实时流（= eval 样本的入口）
+/settings                           keys、告警阈值
 ```
 
-> 建议：这份 PLAN 本身以 issue #1 的形式贴进仓库（`docs(plan): 0→1 路线图`），从第一个 commit 就开始走自己的流程——这就是 dogfooding 的第一课。
+## 5. 数据飞轮（产品的灵魂，全链路）
+
+```
+production 上 agent 处理真实 issue ──▶ /live 队列 ──▶ 人工纠正 label/verdict
+      ▲                                                    │
+      │                                        corrected 样本自动进入新 dataset 版本
+      │                                                    ▼
+release 通过 ◀── eval-gate 绿 ◀── eval run（队列异步、并发=1 节流）
+      │                                  ▲
+      └── 新 production 样本 ─────────────┘（每次上线都在扩大下一轮数据集）
+```
+
+## 6. 实施阶段（每步走既有 pipeline，CI→staging→smoke→release→prod 才算完成）
+
+- **P1 · 真实 LLM**：给 production/staging 配 `OPENAI_API_KEY/BASE_URL/TRIAGE_MODEL`（推荐 Gemini 免费层，OpenAI 兼容端点），`llmMode` 变 live。**当前一切评测的前提。**
+- **P2 · Supabase 基座**：`supabase init` + 首个 migration（§3 schema）+ GitHub OAuth 登录 + 控制台外壳（布局/导航/会话）。
+- **P3 · eval 核心**：`packages/eval`（jsonl dataset 格式、programmatic + model-graded graders、runner CLI）；runs 写库；`/runs` 手动触发 + 报告页。
+- **P4 · 队列 + worker**：激活 `pgmq`（或表轮询兜底）；eval-run fan-out 进队列，Edge Function worker 消费；`/live` 上线。
+- **P5 · 纠正回流**：`/live` 上的人工纠正自动生成 `provenance=corrected` 样本与新 dataset 版本。
+- **P6 · 观测 + e2e 收口**：Sentry 接线、OTel NodeSDK→OTLP（span 挂 run_id）、Playwright 关键流、`eval-gate.yml` 成为 PR 门禁。
+- **P7 · 打磨**：对比视图、Storage 导出、dashboard 趋势、eval 历史入 Supabase 后的 nightly 回归。
+
+顺序有依赖：P1 没做完，P3 的 model-graded 就是空转；P4 没做完，P5 的回流只能同步跑。
+
+## 7. 免费额度红线（v2 更新）
+
+- LLM：Gemini 免费层有 RPM 上限 → **eval 并发=1 + 指数退避**，这是架构约束不是优化项
+- Supabase：7 天不活动暂停（每日 cron 冒烟保活，兼作 uptime 监控）；Queues 若免费项目无法激活 → 表轮询兜底
+- Vercel Hobby cron 每日一次；Sentry 5k errors/月；Storage 1GB
+- eval 数据集控制在 ≤500 items 起步，产物归档进 Storage 不占 DB
+
+## 8. 既有资产继承清单
+
+✅ 交付链路（issue→PR→CI→staging→smoke→release→production）→ 成为平台的 CI/CD
+✅ auto-triage 循环（#11–13 已验证）→ 成为 `/live` 的流量入口与 eval 首个被测 agent
+✅ packages/shared zod 契约 + packages/agent（LlmClient 接缝/白名单/幂等）→ eval 的评分对象
+✅ 15 个 Vitest + PR/issue 模板 + 标签词表 → 随 P2–P6 扩张
