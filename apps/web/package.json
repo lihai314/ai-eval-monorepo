@@ -14,7 +14,8 @@
     "@ai-eval/shared": "workspace:*",
     "next": "^15.5.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "@ai-eval/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

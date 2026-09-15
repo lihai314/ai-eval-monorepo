@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Workspace packages ship as TypeScript sources; transpile them directly.
-  transpilePackages: ["@ai-eval/shared", "@ai-eval/agent"],
+  transpilePackages: ["@ai-eval/shared", "@ai-eval/agent", "@ai-eval/db"],
   // Baked in at build time so /api/health can report exactly what is live —
   // this is what makes the smoke gate meaningful (deployed SHA == expected SHA).
   env: {
