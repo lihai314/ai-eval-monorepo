@@ -9,6 +9,7 @@ Wiring: PG_DSN present -> pgmq + eval_results; absent -> in-memory demo mode.
 from __future__ import annotations
 
 import os
+import pathlib
 import re
 from typing import Any
 
@@ -26,6 +27,18 @@ from .adapters.inmemory import (
 )
 
 APP_VERSION = "0.1.0"
+
+
+def _commit() -> str:
+    """Runtime env first; fall back to the build-time baked file (editable
+    installs keep app/ as the source tree, so the build can write it)."""
+    env = os.environ.get("RENDER_GIT_COMMIT_SHA", "")
+    if env:
+        return env
+    try:
+        return (pathlib.Path(__file__).parent / "commit.txt").read_text().strip() or "dev"
+    except FileNotFoundError:
+        return "dev"
 
 # postgresql://user:password@host/db -> postgresql://user:***@host/db (truncated)
 _DSN_PW = re.compile(r"://([^:/@]+):[^@]*@")
@@ -66,7 +79,7 @@ def create_app() -> FastAPI:
             "mode": mode,
             # Render injects RENDER_GIT_COMMIT_SHA for git-connected services;
             # lets the drift watchdog assert "running code == main".
-            "commit": os.environ.get("RENDER_GIT_COMMIT_SHA", "dev"),
+            "commit": _commit(),
             # password masked; catches a corrupted/mistyped PG_DSN in the host
             # env without exposing the secret (e.g. literal "<DB密码>" pasted).
             "dsn_hint": _dsn_hint(dsn) if dsn else None,
