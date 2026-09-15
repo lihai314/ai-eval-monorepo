@@ -37,13 +37,16 @@ class PgmqQueue:
 
     def send(self, task: dict[str, Any], delay_s: int = 0) -> int:
         with self._conn() as conn, conn.cursor() as cur:
+            # pgmq.send returns a scalar bigint, NOT a named msg_id column
+            # (verified live; `SELECT msg_id FROM pgmq.send(...)` raises
+            # UndefinedColumn).
             cur.execute(
-                "SELECT msg_id FROM pgmq.send(%s, %s::jsonb, %s)",
+                "SELECT pgmq.send(%s, %s::jsonb, %s)",
                 (self._queue, _jsonb(task), delay_s),
             )
             row = cur.fetchone()
             assert row is not None
-            return int(row["msg_id"])
+            return int(row[0])
 
 
 class SupabaseResultStore:
