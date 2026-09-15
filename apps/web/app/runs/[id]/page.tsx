@@ -1,11 +1,16 @@
 import { getRunDetail } from "@ai-eval/db";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { currentUser } from "@/lib/supabase/server";
+import UserBar from "../../../components/UserBar";
 import RunPoller from "./RunPoller";
 
 export const dynamic = "force-dynamic";
 
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const user = await currentUser();
+  if (!user) redirect("/login");
   let run: Awaited<ReturnType<typeof getRunDetail>> = null;
   try {
     run = await getRunDetail(id);
@@ -26,6 +31,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
       <p>
         <Link href="/">← console</Link>
       </p>
+      <UserBar email={user} />
       <h1>
         run {run.id.slice(0, 8)}… <small>({run.dataset})</small>
       </h1>
