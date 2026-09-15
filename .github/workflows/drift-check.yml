@@ -23,6 +23,8 @@ jobs:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # git log -- workers must reach past the shallow boundary
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -50,14 +52,18 @@ jobs:
           PROD=$(fetch https://ai-eval-production-lihai314.vercel.app/api/health .gitSha)
           STAG=$(fetch https://ai-eval-staging-lihai314.vercel.app/api/health .gitSha)
           WRK=$(fetch https://eval-worker.onrender.com/healthz .commit)
+          # Worker baseline = last commit that actually touched worker sources
+          # (Render legitimately skips rebuilds for no-op pushes; comparing to
+          # main tip produced a false alarm when only workflows changed).
+          WRK_BASE=$(git log -1 --format=%H HEAD -- workers render.yaml)
           echo "| plane | expected | actual |" >> "$GITHUB_STEP_SUMMARY"
           echo "| --- | --- | --- |" >> "$GITHUB_STEP_SUMMARY"
           echo "| production | $RELEASED (last release) | $PROD |" >> "$GITHUB_STEP_SUMMARY"
           echo "| staging | $MAIN | $STAG |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| worker | $MAIN | $WRK |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| worker | $WRK_BASE (last worker change) | $WRK |" >> "$GITHUB_STEP_SUMMARY"
           [ "$PROD" = "$RELEASED" ] || DRIFT="$DRIFT production($PROD!=$RELEASED)"
           [ "$STAG" = "$MAIN" ] || DRIFT="$DRIFT staging($STAG)"
-          [ "$WRK" = "$MAIN" ] || DRIFT="$DRIFT worker($WRK)"
+          [ "$WRK" = "$WRK_BASE" ] || DRIFT="$DRIFT worker($WRK!=$WRK_BASE)"
           if MIG=$(pnpm tsx scripts/migration-diff.mts 2>&1); then
             echo "migrations: clean" >> "$GITHUB_STEP_SUMMARY"
           else
