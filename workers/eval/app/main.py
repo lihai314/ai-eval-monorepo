@@ -9,6 +9,7 @@ Wiring: PG_DSN present -> pgmq + eval_results; absent -> in-memory demo mode.
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -25,6 +26,13 @@ from .adapters.inmemory import (
 )
 
 APP_VERSION = "0.1.0"
+
+# postgresql://user:password@host/db -> postgresql://user:***@host/db (truncated)
+_DSN_PW = re.compile(r"://([^:/@]+):[^@]*@")
+
+
+def _dsn_hint(dsn: str) -> str:
+    return _DSN_PW.sub(r"://\1:***@", dsn)[:120]
 
 
 def _build_judge() -> Judge:
@@ -51,7 +59,15 @@ def create_app() -> FastAPI:
 
     @app.get("/healthz")
     def healthz() -> dict[str, Any]:
-        return {"status": "ok", "service": "eval-worker", "version": APP_VERSION, "mode": mode}
+        return {
+            "status": "ok",
+            "service": "eval-worker",
+            "version": APP_VERSION,
+            "mode": mode,
+            # password masked; catches a corrupted/mistyped PG_DSN in the host
+            # env without exposing the secret (e.g. literal "<DB密码>" pasted).
+            "dsn_hint": _dsn_hint(dsn) if dsn else None,
+        }
 
     def require_drain_token(authorization: str = Header(default="")) -> None:
         expected = os.environ.get("WORKER_TOKEN", "")
@@ -61,14 +77,23 @@ def create_app() -> FastAPI:
     @app.post("/drain", dependencies=[Depends(require_drain_token)])
     def drain_endpoint(body: dict[str, Any] | None = None) -> dict[str, Any]:
         body = body or {}
-        report = drain(
-            queue,  # type: ignore[arg-type]
-            store,  # type: ignore[arg-type]
-            HttpSutClient(),
-            _build_judge(),
-            limit=int(body.get("limit", 10)),
-            visibility_s=int(body.get("visibility_s", 120)),
-        )
+        try:
+            report = drain(
+                queue,  # type: ignore[arg-type]
+                store,  # type: ignore[arg-type]
+                HttpSutClient(),
+                _build_judge(),
+                limit=int(body.get("limit", 10)),
+                visibility_s=int(body.get("visibility_s", 120)),
+            )
+        except Exception as err:  # noqa: BLE001
+            # 502 + reason: the host's runtime logs may be inaccessible;
+            # the response itself must be diagnosable (learned from a 500
+            # on Render that was only reproducible locally).
+            raise HTTPException(
+                status_code=502,
+                detail=f"drain failed: {type(err).__name__}: {str(err)[:300]}",
+            ) from err
         result: dict[str, Any] = report.as_dict()
         if mode == "memory":
             result["demo_rows"] = store.rows  # type: ignore[attr-defined]
