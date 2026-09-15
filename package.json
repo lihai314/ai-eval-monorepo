@@ -12,7 +12,13 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "smoke": "node scripts/smoke.mjs",
-    "clean": "rm -rf .turbo apps/*/.turbo packages/*/.turbo apps/web/.next"
+    "clean": "rm -rf .turbo apps/*/.turbo packages/*/.turbo apps/web/.next",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:migrate:new": "supabase migration new",
+    "db:types": "supabase gen types typescript --linked > packages/shared/src/database.types.ts",
+    "db:push": "supabase db push"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.1.0",

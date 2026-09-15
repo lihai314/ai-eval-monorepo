@@ -1,0 +1,43 @@
+name: DB Migrate
+
+# Everything-as-code for the control plane: schema lives in
+# supabase/migrations/*.sql, and pushing to main applies them to the hosted
+# project automatically (like code deploy, but for the database).
+# Soft-skip until the project exists: the step that checks SUPABASE_DB_URL
+# documents why the run is a no-op in the job summary.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+  workflow_dispatch:
+
+concurrency:
+  group: db-migrate
+
+jobs:
+  apply:
+    name: Push migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Apply pending migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -uo pipefail
+          if [ -z "${SUPABASE_DB_URL:-}" ]; then
+            {
+              echo "## ⏭️ Migration push skipped"
+              echo ""
+              echo "Hosted Supabase project not provisioned yet (\`SUPABASE_DB_URL\` secret unset)."
+              echo "See README 'Supabase as code' for the one-time provisioning step."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          supabase db push --db-url "$SUPABASE_DB_URL" --include-all
