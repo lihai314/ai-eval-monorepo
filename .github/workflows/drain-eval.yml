@@ -1,0 +1,37 @@
+name: Drain Eval Queue
+
+# Pull-pattern heartbeat for the Render eval-worker (PLAN §0): free instances
+# sleep at 15 min idle, so a scheduled job wakes it and drains the queue.
+# No-op until the service exists (WORKER_URL unset).
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  drain:
+    name: Wake and drain
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ vars.WORKER_URL != '' }}
+    steps:
+      - name: POST /drain
+        env:
+          WORKER_URL: ${{ vars.WORKER_URL }}
+          WORKER_TOKEN: ${{ secrets.EVAL_WORKER_TOKEN }}
+        run: |
+          set -uo pipefail
+          # cold start costs ~1 min on free instances; retry until Render serves
+          for attempt in 1 2 3; do
+            code=$(curl -s -o drain.json -w "%{http_code}" \
+              --max-time 90 -X POST "$WORKER_URL/drain" \
+              -H "authorization: Bearer $WORKER_TOKEN" \
+              -H 'content-type: application/json' \
+              -d '{"limit": 25, "visibility_s": 300}')
+            echo "attempt $attempt -> HTTP $code: $(cat drain.json)"
+            [ "$code" = "200" ] && exit 0
+            sleep 20
+          done
+          echo "::error::worker unreachable"
+          exit 1

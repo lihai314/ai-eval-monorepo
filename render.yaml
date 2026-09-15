@@ -1,0 +1,23 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploy: Render dashboard → New → Blueprint → connect lihai314/ai-eval-monorepo.
+# The repo is public, so both secrets are isSecret:true (typed in the dashboard,
+# never committed). Free instance + pull-pattern: see PLAN.md §0.
+
+services:
+  - type: web
+    name: eval-worker
+    runtime: python
+    plan: free
+    rootDir: workers/eval
+    buildCommand: python -m pip install -e ".[serve]"
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: DEEPEVAL_ENABLED
+        value: "0" # flip to 1 once judge deps + OPENAI_API_KEY are added
+      - key: WORKER_TOKEN # bearer for POST /drain; mirrors GHA secret EVAL_WORKER_TOKEN
+        isSecret: true
+      - key: PG_DSN # Supabase pooler URL; blank until Supabase project exists -> memory demo mode
+        isSecret: true
