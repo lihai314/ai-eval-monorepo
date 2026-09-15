@@ -1,0 +1,88 @@
+name: Drift Watchdog
+
+# Makes "GitHub is the source of truth" provable between deploys:
+# asserts prod/staging/worker all run main's commit and the remote migration
+# ledger matches the repo. Drift -> labeled issue (deduped); healed -> auto-close.
+# Doubles as Supabase keepalive (DB query + HTTP pings daily).
+
+on:
+  schedule:
+    - cron: "20 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    name: Check all planes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Assert deployed state == main
+        id: check
+        run: |
+          set -uo pipefail
+          MAIN=$(git rev-parse HEAD)
+          echo "main=$MAIN"
+          DRIFT=""
+          fetch() { # url jqfield retries
+            for i in 1 2 3; do
+              out=$(curl -s --max-time 90 "$1" | jq -r "$2" 2>/dev/null) && [ -n "$out" ] && [ "$out" != "null" ] && { echo "$out"; return; }
+              sleep 20
+            done; echo "UNREACHABLE"
+          }
+          PROD=$(fetch https://ai-eval-production-lihai314.vercel.app/api/health .gitSha)
+          STAG=$(fetch https://ai-eval-staging-lihai314.vercel.app/api/health .gitSha)
+          WRK=$(fetch https://eval-worker.onrender.com/healthz .commit)
+          echo "| plane | expected | actual |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| production | $MAIN | $PROD |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| staging | $MAIN | $STAG |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| worker | $MAIN | $WRK |" >> "$GITHUB_STEP_SUMMARY"
+          [ "$PROD" = "$MAIN" ] || DRIFT="$DRIFT production($PROD)"
+          [ "$STAG" = "$MAIN" ] || DRIFT="$DRIFT staging($STAG)"
+          [ "$WRK" = "$MAIN" ] || DRIFT="$DRIFT worker($WRK)"
+          if MIG=$(pnpm tsx scripts/migration-diff.ts 2>&1); then
+            echo "migrations: clean" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "$MIG" >> "$GITHUB_STEP_SUMMARY"
+            DRIFT="$DRIFT migrations"
+          fi
+          echo "drift=${DRIFT# }" >> "$GITHUB_OUTPUT"
+          echo "summary=$GITHUB_STEP_SUMMARY" >> "$GITHUB_ENV"
+
+      - name: File or heal drift issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRIFT: ${{ steps.check.outputs.drift }}
+          MAIN: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+          OPEN=$(gh issue list --repo "$GITHUB_REPOSITORY" --label drift --state open --json number --jq '.[0].number // ""')
+          if [ -n "$DRIFT" ]; then
+            if [ -n "$OPEN" ]; then
+              gh issue comment "$OPEN" --repo "$GITHUB_REPOSITORY" --body "Still drifting at $(date -u +%FT%TZ): $DRIFT (main=$MAIN)"
+            else
+              gh issue create --repo "$GITHUB_REPOSITORY" --label drift \
+                --title "Drift: deployed state != main ($DRIFT)" \
+                --body "Watchdog found drift: \`$DRIFT\` vs main \`$MAIN\`. See run $GITHUB_RUN_ID summary for the expected/actual table. Fix by re-running the relevant deploy path, or commit the drifted change back to the repo."
+            fi
+            echo "::warning::drift detected: $DRIFT"
+          elif [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" --repo "$GITHUB_REPOSITORY" --body "Drift healed at $(date -u +%FT%TZ) — closing."
+            gh issue close "$OPEN" --repo "$GITHUB_REPOSITORY"
+          else
+            echo "all planes match main — nothing to do"
+          fi

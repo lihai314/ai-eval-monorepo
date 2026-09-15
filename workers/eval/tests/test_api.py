@@ -19,6 +19,7 @@ def test_healthz_is_public(app_with_token):
     assert res.status_code == 200
     assert res.json()["mode"] == "memory"
     assert res.json()["dsn_hint"] is None
+    assert res.json()["commit"] == "dev"  # RENDER_GIT_COMMIT_SHA unset locally
 
 
 def test_dsn_hint_masks_password():

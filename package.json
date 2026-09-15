@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@ai-eval/agent": "workspace:*",
-    "@ai-eval/shared": "workspace:*"
+    "@ai-eval/shared": "workspace:*",
+    "@ai-eval/db": "workspace:*"
   }
 }

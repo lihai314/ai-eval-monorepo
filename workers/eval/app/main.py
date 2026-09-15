@@ -64,6 +64,9 @@ def create_app() -> FastAPI:
             "service": "eval-worker",
             "version": APP_VERSION,
             "mode": mode,
+            # Render injects RENDER_GIT_COMMIT_SHA for git-connected services;
+            # lets the drift watchdog assert "running code == main".
+            "commit": os.environ.get("RENDER_GIT_COMMIT_SHA", "dev"),
             # password masked; catches a corrupted/mistyped PG_DSN in the host
             # env without exposing the secret (e.g. literal "<DB密码>" pasted).
             "dsn_hint": _dsn_hint(dsn) if dsn else None,

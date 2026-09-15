@@ -4,12 +4,13 @@ import { buildTaskMessage, type EvalTaskMessage, QUEUE_NAME } from "./task-messa
 export type { EvalTaskMessage };
 export { buildTaskMessage, QUEUE_NAME };
 
-/** Session pooler DSN (port 5432) — set as PG_DSN on Vercel & Render. */
+/** Session pooler DSN (port 5432) — PG_DSN on Vercel & Render,
+ *  SUPABASE_DB_URL in CI; both names accepted. */
 let sql: postgres.Sql | undefined;
-function getSql() {
-  const dsn = process.env.PG_DSN;
+export function getSql() {
+  const dsn = process.env.PG_DSN ?? process.env.SUPABASE_DB_URL;
   if (!dsn) {
-    throw new Error("PG_DSN is not configured");
+    throw new Error("PG_DSN (or SUPABASE_DB_URL) is not configured");
   }
   // max:2 — serverless functions are short-lived; idle_timeout reclaims.
   sql ??= postgres(dsn, { max: 2, idle_timeout: 20, connect_timeout: 10 });
