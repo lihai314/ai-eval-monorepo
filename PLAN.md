@@ -46,11 +46,11 @@ web service 空闲 15 分钟即 spin down、冷启动 ~1 分钟。因此 worker 
 |---|---|---|
 | **Next.js (apps/web)** | 控制台 UI + `/api/*` 业务后端（runs 编排、auth 会话、数据集 CRUD） | Vercel Hobby（双项目沿用） |
 | **Supabase Auth** | GitHub OAuth 登录（多租户预留） | 50k MAU 免费 |
-| **Supabase PostgreSQL** | 实体表（§3）+ RLS；扩展 `pgmq` 承载队列 | 500MB、激活扩展即用；**兜底**：若 Queues 不可用，普通表 + worker 轮询，接口不变 |
+| **Supabase PostgreSQL** | 实体表（§3）+ RLS；扩展 `pgmq` 承载队列。**皆代码**：schema=`supabase/migrations/*.sql`（`db-migrate.yml` 自动应用）、本地栈=`config.toml`+`seeds/`、类型=`pnpm db:types` 生成进 shared | 500MB、激活扩展即用；**兜底**：若 Queues 不可用，普通表 + worker 轮询，接口不变 |
 | **Supabase Storage** | eval 产物：原始 LLM 输出归档、CSV/JSON 报告导出 | 1GB 免费 |
 | **Render worker（workers/eval）** | **评测执行面**：drain 队列 → httpx 调 SUT → 打分（exact_match 零 key 可用；geval 走 DeepEval，`[judge]` 可选 extra）→ 写 eval_results | 免费 web service + 拉取式 `/drain`（见 §0） |
 | **Supabase Edge Functions** | （可选保留）GitHub webhook 轻入口；当前已由 Actions 的 `triage.yml` 承担 | 50 万调用/月 |
-| **GitHub Actions** | 已有 pipeline + 新增：`e2e.yml`（Playwright）、`eval-gate.yml`（prompt 变更触发） | 公开仓库免费 |
+| **GitHub Actions** | 已有 pipeline + 新增：`db-migrate.yml`（merge→`supabase db push`，万物皆代码）、`drain-eval.yml`（唤醒 worker 排队列）、后续 `e2e.yml`（Playwright）、`eval-gate.yml` | 公开仓库免费 |
 | **Vitest** | 现有 14 测 + eval 逻辑测 | — |
 | **Playwright** | 关键用户流：登录→建数据集→跑 eval→看报告→纠正回流 | — |
 | **Agent Evaluation** | `packages/eval`：**既是产品内核也是 CI 门禁**——dataset schema / graders / runner 一份代码两用 | — |

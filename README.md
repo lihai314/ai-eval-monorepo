@@ -13,11 +13,27 @@ falls back to a deterministic mock client, so the pipeline always runs end-to-en
 apps/web          Next.js app — UI + /api/health + /api/triage (deployed on Vercel)
 packages/shared   zod schemas & contracts (API ⇄ agent ⇄ eval all speak this)
 packages/agent    triage agent: prompt, LLM client seam, strict output validation
-scripts/          smoke.mjs — the deploy gate
-.github/          workflows (ci / deploy-staging / release-production) + templates
+workers/eval      Python eval worker (Render, pull-pattern /drain) — see workers/eval/README.md
+supabase/         config.toml + migrations/ + seeds/ — the control plane, as code
+scripts/          smoke.mjs · auto-triage.mts · setup-vercel.sh
+render.yaml       Blueprint definition for the eval worker (free web service)
+.github/          workflows (ci / deploy-staging / release-production / triage / db-migrate / drain-eval) + templates
 docs/PIPELINE.md  stage-by-stage map of the pipeline (start here)
-PLAN.md           the 0→1 learning roadmap
+PLAN.md           product & architecture plan (v2.1)
 ```
+
+## Everything-as-code principle
+
+Every moving part is declared in this repo; the platforms just execute it:
+
+| Surface | Code artifact | Reconciled by |
+| --- | --- | --- |
+| Schema | `supabase/migrations/*.sql` | `db-migrate.yml` → `supabase db push` on merge to main |
+| Local stack | `supabase/config.toml` + `seeds/seed.sql` | `pnpm db:start` / `pnpm db:reset` (Docker) |
+| TS types from schema | `pnpm db:types` | generated into `packages/shared` |
+| Worker service | `render.yaml` (Blueprint) | Render Blueprint apply |
+| Queue heartbeat | `.github/workflows/drain-eval.yml` | cron → `POST /drain` |
+| Web app env | `scripts/setup-vercel.sh` | idempotent Vercel project config |
 
 ## Local development
 
@@ -58,9 +74,16 @@ Details, failure playbook, and what each stage teaches: **[docs/PIPELINE.md](doc
    - `VERCEL_TOKEN_PROD` (secret) — a second `vcp_` token from ai-eval-production → Settings → Tokens
      (project-scoped tokens can't deploy to the other project — learned the hard way in run 34855756577)
    - `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_STAGING`, `VERCEL_PROJECT_ID_PRODUCTION` (IDs, not sensitive)
-3. **Branch protection** on `main`: require CI checks (Lint, Unit, API, Build) to pass before merge.
+3. **Branch protection** on `main`: require CI checks (Lint, Unit, API, Worker, Build) to pass before merge.
 4. Optional hard gate: add required reviewers to the `production` **environment**
    (Settings → Environments → production), turning "Release" into an approval.
+5. **Supabase project** (free tier, `supabase projects create` or dashboard):
+   then set `SUPABASE_DB_URL` (session pooler connection string) as a repo secret —
+   `db-migrate.yml` then auto-applies every merged migration; hand the pooler DSN to
+   Render's `PG_DSN` secret and set the `SUPABASE_PROJECT_REF` repo variable.
+6. **Render**: New → Blueprint → this repo → fill the two `isSecret` fields
+   (`WORKER_TOKEN` mirrors the GHA secret `EVAL_WORKER_TOKEN`; `PG_DSN` empty until 5).
+   After the service is live, set repo variable `WORKER_URL` → the drain cron arms itself.
 
 ## Roadmap
 
