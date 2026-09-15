@@ -26,7 +26,10 @@ curl -X POST localhost:8000/drain -d '{"limit":10}' -H 'content-type: applicatio
 ## Deploy (Render, free web service)
 
 - Root: `workers/eval` · Build: `pip install -e .[serve]` · Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- Env: `PG_DSN` (Supabase pooler), `WORKER_TOKEN` (random string; also stored as GHA secret `EVAL_WORKER_TOKEN`)
+- Env: `WORKER_TOKEN` is created as a `sync: false` placeholder by the Blueprint —
+  edit it once in the Render dashboard (Environment tab) to the real bearer
+  (mirrors GHA secret `EVAL_WORKER_TOKEN`). Add `PG_DSN` (Supabase pooler) in the
+  dashboard when the project exists; without it the worker runs in memory demo mode.
 - Real LLM judging: `pip install -e '.[judge]'` + `DEEPEVAL_ENABLED=1` + `OPENAI_API_KEY`
 - Trigger: `.github/workflows/drain-eval.yml` (schedule) and the BFF run button
 
