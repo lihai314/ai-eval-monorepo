@@ -7,6 +7,7 @@ Connection is plain Postgres (psycopg3, transaction pooler port 6543 or direct
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import psycopg  # psycopg3, [binary] extra
@@ -68,7 +69,12 @@ class SupabaseResultStore:
             )
 
 
-def _task_from_row(msg_id: int, message: dict[str, Any]) -> EvalTask:
+def _task_from_row(msg_id: int, message: dict[str, Any] | str) -> EvalTask:
+    # Defense in depth: a producer that double-encodes (e.g. JSON.stringify
+    # into a ::jsonb cast) delivers a jsonb *string scalar*; psycopg hands it
+    # over as str. Decode once and move on rather than crash the drain.
+    if isinstance(message, str):
+        message = json.loads(message)
     return EvalTask(
         msg_id=msg_id,
         run_id=str(message["run_id"]),
@@ -81,6 +87,4 @@ def _task_from_row(msg_id: int, message: dict[str, Any]) -> EvalTask:
 
 
 def _jsonb(obj: Any) -> str:
-    import json
-
     return json.dumps(obj, default=str)
