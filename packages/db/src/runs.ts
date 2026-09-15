@@ -114,10 +114,13 @@ export async function createEvalRun(
       expected: (it.expected as Record<string, unknown>) ?? null,
       sutBaseUrl,
     });
-    // pgmq.send returns a scalar bigint (verified live).
-    await s`SELECT pgmq.send(${QUEUE_NAME}, ${JSON.stringify(msg)}::jsonb)`;
+    // Pass the object directly: postgres.js serializes JS objects to jsonb.
+    // `${JSON.stringify(msg)}::jsonb` DOUBLE-ENCODES into a jsonb string
+    // scalar (verified: jsonb_typeof = 'string'), which the worker then
+    // receives as a str — found by the first BFF-driven run.
+    await s`SELECT pgmq.send(${QUEUE_NAME}, ${msg as unknown as postgres.Parameter}, 0)`;
   }
-  await s`update eval_runs set totals = ${JSON.stringify({ items: items.length })}::jsonb where id = ${run.id}`;
+  await s`update eval_runs set totals = ${{ items: items.length } as unknown as postgres.Parameter} where id = ${run.id}`;
   return { runId: String(run.id), enqueued: items.length };
 }
 
