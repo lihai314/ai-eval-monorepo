@@ -81,11 +81,11 @@ Details, failure playbook, and what each stage teaches: **[docs/PIPELINE.md](doc
    then set `SUPABASE_DB_URL` (session pooler connection string) as a repo secret —
    `db-migrate.yml` then auto-applies every merged migration; hand the pooler DSN to
    Render's `PG_DSN` secret and set the `SUPABASE_PROJECT_REF` repo variable.
-6. **Render**: New → Blueprint → this repo → Create (blueprint validator requires
-   key+value per env var, so `WORKER_TOKEN` ships as a `sync: false` placeholder).
-   After creation: service → Environment → edit `WORKER_TOKEN` to the real bearer
-   (== GHA secret `EVAL_WORKER_TOKEN`), and add `PG_DSN` once Supabase exists.
-   When the service is live, set repo variable `WORKER_URL` → the drain cron arms itself.
+6. **Render**: New → Blueprint → this repo. The Blueprint declares `WORKER_TOKEN`
+   as `key + sync: false` (no value committed), so Render **prompts for it during
+   creation** — paste the same bearer as the GHA secret `EVAL_WORKER_TOKEN`.
+   Add `PG_DSN` in the dashboard once Supabase exists; when the service is live,
+   set repo variable `WORKER_URL` → the drain cron arms itself.
 
 ## Roadmap
 
