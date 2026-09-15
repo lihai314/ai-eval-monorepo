@@ -36,6 +36,9 @@ importers:
       '@ai-eval/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@ai-eval/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@ai-eval/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -73,6 +76,19 @@ importers:
       zod:
         specifier: ^4.0.0
         version: 4.6.5
+    devDependencies:
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.2)(tsx@4.23.13)
+
+  packages/db:
+    dependencies:
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
     devDependencies:
       typescript:
         specifier: ^5.8.0
@@ -890,6 +906,10 @@ packages:
     resolution: {integrity: sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A==}
     engines: {node: ^10 || ^12 || >=14}
 
+  postgres@3.4.9:
+    resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
+    engines: {node: '>=12'}
+
   react-dom@19.3.0:
     resolution: {integrity: sha512-JDk8dgif51OjFoDE70+OT9ICyYr+69HlmihNwp1+Nsfbna3t5sIiCa9ZJktDmQ4/1b/rn26hIAR2uYXDMr5r0Q==}
     peerDependencies:
@@ -1619,6 +1639,8 @@ snapshots:
       nanoid: 3.3.19
       picocolors: 1.1.1
       source-map-js: 1.2.1
+
+  postgres@3.4.9: {}
 
   react-dom@19.3.0(react@19.3.0):
     dependencies:
