@@ -1,11 +1,14 @@
-# ai-eval-monorepo — issue-pilot
+# ai-eval-monorepo — eval-hub
 
-Learning project: an agent app built *on* the full delivery chain —
-**Issue → Branch → PR → CI → Merge → Staging → Smoke → Release → Production → Monitoring**.
+**Agent evaluation platform with a visual ops console**: datasets → runs → per-item verdicts,
+executed by a queue-triggered Python worker (Render, httpx + DeepEval) against any SUT —
+starting with this repo's own issue-triage agent (dogfooding: every auto-triaged issue is
+potential eval data). Built *on* the full delivery chain
+**Issue → Branch → PR → CI(5 gates) → Merge → Staging → Smoke → Release → Production → Watchdog**,
+with everything-as-code: schema, services, auth config and drift proofs all live in this repo.
 
-The product itself is an **issue-triage agent**: `POST /api/triage` takes a GitHub issue and
-returns a structured verdict (`category / severity / labels / summary`). No LLM key? The agent
-falls back to a deterministic mock client, so the pipeline always runs end-to-end.
+📖 **Usage guide (login, running evals, troubleshooting): [docs/USAGE.md](docs/USAGE.md)** ·
+Architecture & phases: [PLAN.md](PLAN.md) · Pipeline stages: [docs/PIPELINE.md](docs/PIPELINE.md)
 
 ## Repo layout
 
@@ -18,7 +21,8 @@ supabase/         config.toml + migrations/ + seeds/ — the control plane, as c
 scripts/          smoke.mjs · auto-triage.mts · setup-vercel.sh
 render.yaml       Blueprint definition for the eval worker (free web service)
 .github/          workflows (ci / deploy-staging / release-production / triage / db-migrate / drain-eval) + templates
-docs/PIPELINE.md  stage-by-stage map of the pipeline (start here)
+docs/PIPELINE.md  stage-by-stage map of the pipeline
+docs/USAGE.md     end-user guide (Chinese): login, runs, watchdog, troubleshooting
 PLAN.md           product & architecture plan (v2.1)
 ```
 
