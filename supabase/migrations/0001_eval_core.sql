@@ -1,9 +1,15 @@
 -- 0001_eval_core.sql — eval-hub schema (see PLAN v2.1 §3)
--- Apply via `supabase db push` / dashboard SQL editor.
+-- Applied automatically by db-migrate.yml on merge to main (or supabase db push).
+-- Function names verified live against project snxliarypkeuzvecjnfy:
+-- pgmq installs into its OWN `pgmq` schema (pgmq.create/read/archive/send/list_queues).
 
-create extension if not exists pgmq with schema extensions;
-select extensions.pgmq_create('eval_tasks')
-where not exists (select 1 from pgmq.list_queues() where queue_name = 'eval_tasks');
+create extension if not exists pgmq;
+
+do $$ begin
+  if not exists (select 1 from pgmq.list_queues() where queue_name = 'eval_tasks') then
+    perform pgmq.create('eval_tasks');
+  end if;
+end $$;
 
 -- agents: a versioned definition of "how to call the SUT"
 create table if not exists agents (

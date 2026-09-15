@@ -33,12 +33,13 @@ class PgmqQueue:
 
     def archive(self, msg_id: int) -> None:
         with self._conn() as conn, conn.cursor() as cur:
-            cur.execute("SELECT pgmq_archive(%s, %s)", (self._queue, msg_id))
+            cur.execute("SELECT pgmq.archive(%s, %s)", (self._queue, msg_id))
 
     def send(self, task: dict[str, Any], delay_s: int = 0) -> int:
         with self._conn() as conn, conn.cursor() as cur:
             cur.execute(
-                "SELECT msg_id FROM pgmq.send(%s, %s, %s)", (self._queue, task, delay_s)
+                "SELECT msg_id FROM pgmq.send(%s, %s::jsonb, %s)",
+                (self._queue, _jsonb(task), delay_s),
             )
             row = cur.fetchone()
             assert row is not None
