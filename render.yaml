@@ -20,7 +20,7 @@ services:
     runtime: python
     plan: free
     rootDir: workers/eval
-    buildCommand: python -m pip install -e ".[serve]"
+    buildCommand: python -m pip install -e ".[serve]" && echo "${RENDER_GIT_COMMIT_SHA:-unknown}" > app/commit.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
     envVars:

@@ -54,7 +54,7 @@ jobs:
           [ "$PROD" = "$MAIN" ] || DRIFT="$DRIFT production($PROD)"
           [ "$STAG" = "$MAIN" ] || DRIFT="$DRIFT staging($STAG)"
           [ "$WRK" = "$MAIN" ] || DRIFT="$DRIFT worker($WRK)"
-          if MIG=$(pnpm tsx scripts/migration-diff.ts 2>&1); then
+          if MIG=$(pnpm tsx scripts/migration-diff.mts 2>&1); then
             echo "migrations: clean" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "$MIG" >> "$GITHUB_STEP_SUMMARY"
