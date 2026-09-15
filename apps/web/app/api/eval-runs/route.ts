@@ -1,4 +1,5 @@
 import { createEvalRun, listRuns } from "@ai-eval/db";
+import { currentUser } from "@/lib/supabase/server";
 
 export async function GET(): Promise<Response> {
   try {
@@ -9,6 +10,10 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // Writing = spending (queue fan-out, later LLM calls). Auth-gated.
+  if (!(await currentUser())) {
+    return Response.json({ error: "unauthenticated" }, { status: 401 });
+  }
   try {
     const body = (await request.json()) as { datasetName?: unknown };
     const datasetName = typeof body?.datasetName === "string" ? body.datasetName : "";
