@@ -13,6 +13,7 @@ on:
 permissions:
   contents: read
   issues: write
+  actions: read # gh run list needs this; without it RELEASED silently fell back to MAIN
 
 jobs:
   drift:
@@ -49,9 +50,12 @@ jobs:
           # release run, not main — otherwise every merge-before-release is a false alarm.
           RELEASED=$(gh run list --workflow "Release Production" --status success --limit 1 --json headSha --jq '.[0].headSha // empty')
           RELEASED="${RELEASED:-$MAIN}"
+          # stdout for greppable logs (step summary is not in run logs)
+          echo "released=$RELEASED"
           PROD=$(fetch https://ai-eval-production-lihai314.vercel.app/api/health .gitSha)
           STAG=$(fetch https://ai-eval-staging-lihai314.vercel.app/api/health .gitSha)
           WRK=$(fetch https://eval-worker.onrender.com/healthz .commit)
+          echo "prod=$PROD staging=$STAG worker=$WRK"
           # Worker baseline = last commit that actually touched worker sources
           # (Render legitimately skips rebuilds for no-op pushes; comparing to
           # main tip produced a false alarm when only workflows changed).
