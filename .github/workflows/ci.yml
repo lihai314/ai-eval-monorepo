@@ -51,9 +51,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo run test --filter=@ai-eval/web
 
+  worker:
+    name: Worker Tests (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet -e "workers/eval[test]"
+      - run: python -m pytest workers/eval/tests -q
+
   build:
     name: Build
-    needs: [lint, unit, api]
+    needs: [lint, unit, api, worker]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
