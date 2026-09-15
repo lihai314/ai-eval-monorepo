@@ -2,16 +2,16 @@
 # Deploy: Render dashboard → New → Blueprint → connect lihai314/ai-eval-monorepo.
 # Free instance + pull-pattern: see PLAN.md §0.
 #
-# Secret handling (fixed after deploy attempt #1 hit the blueprint validator):
-# every envVar entry must carry key AND value — a bare `isSecret: true` is
-# invalid. Pattern: placeholder value + `sync: false`, i.e. Render creates the
-# var but never overwrites what you set in the dashboard. After creation:
-# service → Environment → edit WORKER_TOKEN to the real bearer (same value as
-# the GHA secret EVAL_WORKER_TOKEN). The repo is public: real secrets never
-# get committed here, ever.
+# Secret handling (settled after two validator rejections): the documented
+# pattern for a never-committed secret is `key` + `sync: false` and NOTHING
+# else — Render then prompts for the value during Blueprint creation.
+# Attempt 1 added `isSecret` (undocumented property → entry looked value-less
+# → "must have a key and value"); attempt 2 added `value` (conflicts with
+# `sync`). At creation, paste the bearer that equals the GHA secret
+# EVAL_WORKER_TOKEN.
 #
-# PG_DSN is intentionally undeclared: worker boots in memory demo mode without
-# it. Add it in the dashboard as a secret when the Supabase project lands —
+# PG_DSN stays undeclared: the worker boots in memory demo mode without it.
+# Add it in the dashboard as an env var when the Supabase project lands —
 # a placeholder string would flip the `if dsn:` branch and break demo mode.
 
 services:
@@ -29,6 +29,4 @@ services:
       - key: DEEPEVAL_ENABLED
         value: "0" # flip to 1 once judge deps + OPENAI_API_KEY are added
       - key: WORKER_TOKEN
-        value: "placeholder-edit-in-dashboard"
-        isSecret: true
-        sync: false
+        sync: false # prompted at creation; never committed
