@@ -11,6 +11,9 @@ importers:
       '@ai-eval/agent':
         specifier: workspace:*
         version: link:packages/agent
+      '@ai-eval/db':
+        specifier: workspace:*
+        version: link:packages/db
       '@ai-eval/shared':
         specifier: workspace:*
         version: link:packages/shared
