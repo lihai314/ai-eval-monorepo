@@ -43,15 +43,19 @@ jobs:
               sleep 20
             done; echo "UNREACHABLE"
           }
+          # Production is gated by Release: compare against the last SUCCESSFUL
+          # release run, not main — otherwise every merge-before-release is a false alarm.
+          RELEASED=$(gh run list --workflow "Release Production" --status success --limit 1 --json headSha --jq '.[0].headSha // empty')
+          RELEASED="${RELEASED:-$MAIN}"
           PROD=$(fetch https://ai-eval-production-lihai314.vercel.app/api/health .gitSha)
           STAG=$(fetch https://ai-eval-staging-lihai314.vercel.app/api/health .gitSha)
           WRK=$(fetch https://eval-worker.onrender.com/healthz .commit)
           echo "| plane | expected | actual |" >> "$GITHUB_STEP_SUMMARY"
           echo "| --- | --- | --- |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| production | $MAIN | $PROD |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| production | $RELEASED (last release) | $PROD |" >> "$GITHUB_STEP_SUMMARY"
           echo "| staging | $MAIN | $STAG |" >> "$GITHUB_STEP_SUMMARY"
           echo "| worker | $MAIN | $WRK |" >> "$GITHUB_STEP_SUMMARY"
-          [ "$PROD" = "$MAIN" ] || DRIFT="$DRIFT production($PROD)"
+          [ "$PROD" = "$RELEASED" ] || DRIFT="$DRIFT production($PROD!=$RELEASED)"
           [ "$STAG" = "$MAIN" ] || DRIFT="$DRIFT staging($STAG)"
           [ "$WRK" = "$MAIN" ] || DRIFT="$DRIFT worker($WRK)"
           if MIG=$(pnpm tsx scripts/migration-diff.mts 2>&1); then
