@@ -18,6 +18,15 @@ def test_healthz_is_public(app_with_token):
     res = client.get("/healthz")
     assert res.status_code == 200
     assert res.json()["mode"] == "memory"
+    assert res.json()["dsn_hint"] is None
+
+
+def test_dsn_hint_masks_password():
+    from app.main import _dsn_hint
+
+    hint = _dsn_hint("postgresql://postgres.abc123:S3cr3t@aws-0-x.pooler.supabase.com:5432/postgres")
+    assert "S3cr3t" not in hint
+    assert hint.startswith("postgresql://postgres.abc123:***@aws-0-")
 
 
 def test_drain_requires_bearer(app_with_token):

@@ -83,3 +83,29 @@ def test_judge_blowup_is_recorded_and_archived():
     assert report.processed == 1
     assert q.archived == [1]  # poison metric must not wedge the queue
     assert "error" in store.rows[0]["scores"][0]
+
+
+def _grade(expected, output):  # noqa: ANN001
+    t = task(1, "x", expected)
+    return ExactMatchJudge().grade({"type": "exact_match"}, t, output)
+
+
+def test_exact_match_is_subset_not_full_equality():
+    # SUT responses carry wrapper fields (model/latencyMs); expected asserts a
+    # partial view — including a nested path.
+    out = {"issueNumber": 1, "model": "mock", "latencyMs": 2, "result": {"category": "docs", "severity": "low"}}
+    assert _grade({"result": {"category": "docs"}}, out)["passed"] is True
+    assert _grade({"result": {"category": "bug"}}, out)["passed"] is False
+    assert _grade({"result": {"category": "docs"}, "model": "mock"}, out)["passed"] is True
+
+
+def test_exact_match_number_string_equivalence_and_missing_keys():
+    assert _grade({"issueNumber": 7}, {"issueNumber": "7"})["passed"] is True
+    miss = _grade({"severity": "high", "extra": 1}, {"severity": "low"})
+    assert miss["passed"] is False
+    assert "severity" in miss["reason"] and "extra" in miss["reason"]
+
+
+def test_exact_match_empty_expected_fails():
+    assert _grade({}, {"a": 1})["passed"] is False
+    assert _grade(None, {"a": 1})["passed"] is False
