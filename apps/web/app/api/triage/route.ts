@@ -41,6 +41,9 @@ export async function POST(request: Request): Promise<Response> {
         { status: 502 },
       );
     }
-    throw error;
+    // LLM network/config failures: 502 with the reason in the body — a bare
+    // 500 hides the cause from every caller (learned on the Render worker).
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    return Response.json({ error: "triage_failed", detail: detail.slice(0, 300) }, { status: 502 });
   }
 }
