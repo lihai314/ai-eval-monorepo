@@ -18,12 +18,12 @@ describe("datasetCreateSchema", () => {
 });
 
 describe("datasetItemPayloadSchema", () => {
-  it("accepts input with partial expected", () => {
-    const payload = {
+  it("PRESERVES wrapper keys like result (regression: zod stripping erased them)", () => {
+    const parsed = datasetItemPayloadSchema.parse({
       input: { issueNumber: 1, title: "t" },
       expected: { result: { category: "docs" } },
-    };
-    expect(datasetItemPayloadSchema.safeParse(payload).success).toBe(true);
+    });
+    expect(parsed.expected).toEqual({ result: { category: "docs" } });
   });
 
   it("defaults expected to null (unjudged production sample)", () => {
@@ -37,8 +37,10 @@ describe("datasetItemPayloadSchema", () => {
 });
 
 describe("itemCorrectionSchema", () => {
-  it("accepts a partial correction and null", () => {
-    expect(itemCorrectionSchema.safeParse({ expected: { category: "bug" } }).success).toBe(true);
+  it("accepts a subset correction and null", () => {
+    expect(
+      itemCorrectionSchema.safeParse({ expected: { result: { category: "bug" } } }).success,
+    ).toBe(true);
     expect(itemCorrectionSchema.safeParse({ expected: null }).success).toBe(true);
   });
 });

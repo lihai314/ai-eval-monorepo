@@ -1,6 +1,6 @@
 /** Dataset CRUD for the management UI (P3). All writes go through the BFF
  *  with an authenticated session; this layer only speaks SQL. */
-import postgres from "postgres";
+import type postgres from "postgres";
 import { getSql } from "./runs";
 
 export interface DatasetSummary {
