@@ -1,27 +1,33 @@
-name: Bug report
-description: Something is broken
+name: Bug 报告
+description: 平台或 agent 的行为不符合预期时用这个模板
 labels: ["type:bug"]
 body:
   - type: textarea
     id: what-happened
     attributes:
-      label: What happened?
-      placeholder: Describe the observed vs expected behavior, include the URL/environment.
+      label: 发生了什么？
+      description: 描述「观察到的行为」与「预期行为」的差异，附上环境（staging/production）和页面 URL。
+      placeholder: |
+        例如：在 staging 提交评测任务后，任务一直显示 pending，
+        但 worker 日志显示队列已排空。预期是 1 分钟内出现判分结果。
     validations:
       required: true
   - type: textarea
     id: repro
     attributes:
-      label: Reproduction steps
+      label: 复现步骤
+      description: 从哪一步开始、点了什么、看到什么——让没见过这个问题的人也能复现。
       placeholder: |
-        1. ...
-        2. ...
+        1. 打开 /runs 页面
+        2. 点击 ▶ Run eval
+        3. 任务停留在 pending …
     validations:
       required: true
   - type: dropdown
     id: area
     attributes:
-      label: Area
+      label: 影响范围
+      description: 问题主要出在哪个部分（决定分诊时打哪个方向的 label）
       options: [web, agent, pipeline, docs, other]
     validations:
       required: true
