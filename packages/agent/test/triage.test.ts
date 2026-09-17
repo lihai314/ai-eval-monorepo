@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildTriagePrompt,
   createMockClient,
   getLlmFromEnv,
   type LlmClient,
@@ -12,6 +13,15 @@ const request = { issueNumber: 42, title: "app crashes on startup", body: "stack
 function fakeLlm(model: string, reply: string): LlmClient {
   return { model, complete: async () => reply };
 }
+
+describe("buildTriagePrompt", () => {
+  it("carries the boundary rules that fixed the 2/14 misclassifications", () => {
+    const prompt = buildTriagePrompt({ issueNumber: 1, title: "t", body: "b" });
+    expect(prompt).toContain("Stack traces alone do");
+    expect(prompt).toContain("even if the reporter suspects a bug");
+    expect(prompt).toContain("Chinese or English");
+  });
+});
 
 describe("triageIssue", () => {
   it("parses a valid model response into a TriageResult", async () => {
