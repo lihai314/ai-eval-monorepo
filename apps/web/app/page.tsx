@@ -7,9 +7,14 @@ import NewRunForm from "./runs/NewRunForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ dataset?: string }>;
+}) {
   const user = await currentUser();
   if (!user) redirect("/login");
+  const { dataset: preselect } = await searchParams;
   let runs: Awaited<ReturnType<typeof listRuns>> = [];
   let datasets: string[] = [];
   let dbError: string | null = null;
@@ -25,7 +30,8 @@ export default async function Home() {
       <UserBar email={user} />
       <p>
         Agent evaluation platform: a run fans dataset items onto <code>pgmq.eval_tasks</code>; the
-        Render worker drains on the 30-min heartbeat and scores against the production SUT.
+        Render worker drains on the 30-min heartbeat and scores against the production SUT. ·{" "}
+        <Link href="/datasets">Manage datasets →</Link>
       </p>
 
       {dbError ? (
@@ -34,7 +40,7 @@ export default async function Home() {
         </p>
       ) : (
         <>
-          <NewRunForm datasets={datasets} />
+          <NewRunForm datasets={datasets} initial={preselect} />
           <h2>Recent runs</h2>
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>

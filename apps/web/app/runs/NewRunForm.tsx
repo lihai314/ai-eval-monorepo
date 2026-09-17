@@ -3,9 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export default function NewRunForm({ datasets }: { datasets: string[] }) {
+export default function NewRunForm({
+  datasets,
+  initial,
+}: {
+  datasets: string[];
+  initial?: string;
+}) {
   const router = useRouter();
-  const [dataset, setDataset] = useState(datasets[0] ?? "e2e-smoke");
+  const [dataset, setDataset] = useState(initial ?? datasets[0] ?? "e2e-smoke");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
