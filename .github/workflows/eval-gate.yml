@@ -1,0 +1,74 @@
+name: Eval Gate
+
+# The automated version of the #49 experiment: a PR that touches the agent or
+# its contracts gets scored against triage-zh-v1 using the PR's OWN prompt
+# code (in-process — production serves the last release, so HTTP-eval would
+# measure the wrong thing). Red below GATE_MIN_SCORE, report always posted.
+
+on:
+  pull_request:
+    paths:
+      - "packages/agent/**"
+      - "packages/shared/**"
+      - "scripts/eval-gate.mts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  gate:
+    name: Eval Gate (triage-zh-v1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      GATE_MIN_SCORE: "80"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run eval on the PR's agent
+        id: gate
+        env:
+          NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            {
+              echo "## ⏭️ Eval Gate skipped"
+              echo ""
+              echo "\`OPENAI_API_KEY\` repo secret is not set — add the Ark key to enable automatic prompt scoring."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          set +e
+          pnpm tsx scripts/eval-gate.mts > gate-report.txt 2>&1
+          gate_code=$?
+          set -e
+          {
+            echo "<!-- eval-gate -->"
+            echo "## 📏 Eval Gate — \`${GATE_DATASET:-triage-zh-v1}\`"
+            echo ""
+            echo '```'
+            cat gate-report.txt
+            echo '```'
+            echo "_PR prompt code scored in-process; red below ${GATE_MIN_SCORE}%._"
+          } > pr-comment.md
+          CID=$(gh api "repos/$REPO/issues/$NUMBER/comments" --jq '.[] | select(.body | contains("<!-- eval-gate -->")) | .id' | tail -1)
+          if [ -n "$CID" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$CID" -F body=@pr-comment.md >/dev/null
+          else
+            gh pr comment "$NUMBER" --body-file pr-comment.md >/dev/null
+          fi
+          echo "gate_code=$gate_code" >> "$GITHUB_OUTPUT"
+          cat gate-report.txt >> "$GITHUB_STEP_SUMMARY"
+          exit "$gate_code"

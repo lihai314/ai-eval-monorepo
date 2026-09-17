@@ -60,6 +60,7 @@ pnpm smoke            # BASE_URL=https://... node scripts/smoke.mjs
 | PR | `gh pr create` → checks + Vercel preview | human |
 | CI | `.github/workflows/ci.yml`: lint ∥ unit ∥ api → build | PR + push main |
 | Merge | squash-merge into protected `main` | after CI green |
+| Eval Gate | `.github/workflows/eval-gate.yml` | PR touching agent/** is scored against triage-zh-v1 in-process |
 | Staging Deploy | `.github/workflows/deploy-staging.yml` → Vercel `ai-eval-staging` | push main |
 | Smoke | `scripts/smoke.mjs` (health + exact-commit check) | part of staging job |
 | Release | `gh workflow run release-production.yml` + `production` environment gate | human |
