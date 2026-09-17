@@ -53,17 +53,15 @@ export interface CommentMeta {
 
 export function formatTriageComment(result: TriageResult, meta: CommentMeta): string {
   return [
-    "### 🤖 issue-pilot triage",
+    "### 🤖 issue-pilot 自动分诊",
     "",
-    `**category** \`${result.category}\` · **severity** \`${result.severity}\` · **model** \`${meta.model}\` · \`${meta.latencyMs}ms\``,
+    `**分类** \`${result.category}\` · **严重度** \`${result.severity}\` · **模型** \`${meta.model}\` · \`${meta.latencyMs}ms\``,
     "",
     `> ${result.summary}`,
     "",
-    result.labels.length > 0
-      ? `_proposed labels: ${result.labels.map((l) => `\`${l}\``).join(" ")}_`
-      : "",
+    result.labels.length > 0 ? `_提议标签: ${result.labels.map((l) => `\`${l}\``).join(" ")}_` : "",
     "",
-    "<sub>Applied automatically from the deployed build. Disagree? Change the labels — corrections are what the eval set learns from.</sub>",
+    "<sub>由线上构建自动生成。不同意这个判断？直接修改标签——你的纠正就是评测集学习的原料。</sub>",
     TRIAGE_MARKER,
   ]
     .filter(Boolean)
