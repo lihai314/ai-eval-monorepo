@@ -1,25 +1,33 @@
-name: Feature request
-description: Propose new behavior for the agent app or the pipeline
+name: 功能建议
+description: 为 agent 应用或交付流水线提议新能力时用这个模板
 labels: ["type:feature"]
 body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem / motivation
-      placeholder: What is painful or missing today?
+      label: 问题 / 动机
+      description: 现在有什么痛点或缺失？越具体越好——最好带上你当时想完成但没完成的事。
+      placeholder: |
+        例如：每次修改 prompt 都不确定效果是变好还是变差，
+        只能凭感觉上线。
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Proposal
-      placeholder: What should happen instead?
+      label: 建议方案
+      description: 期望的行为是什么？如果有多条思路，写你最推荐的一条。
+      placeholder: |
+        例如：PR 触碰 packages/agent 的 prompt 时，
+        CI 自动对 golden 数据集跑一轮评测，回归则拦下。
     validations:
       required: true
   - type: textarea
     id: done
     attributes:
-      label: Definition of done
-      placeholder: A concrete check that says this shipped (endpoint behavior, green gate, dashboard...).
+      label: 完成标准
+      description: 一条可验证的「做完了」判据（接口行为、门禁变绿、报表出现……）。
+      placeholder: |
+        例如：故意改坏 prompt 提交 PR，eval 门禁把它拦下并给出回归分数。
     validations:
       required: true
