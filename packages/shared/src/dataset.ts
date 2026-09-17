@@ -1,15 +1,20 @@
 import { z } from "zod";
-import { triageRequestSchema, triageResultSchema } from "./triage";
+import { triageRequestSchema } from "./triage";
 
 /**
  * Dataset item contract for the triage SUT.
  * input   — what gets sent to the SUT (same shape as /api/triage)
- * expected — the partial ground truth the graders assert (subset matching:
- *            only fields you care about). null = unjudged production sample.
+ * expected — arbitrary subset JSON asserted against the FULL SUT response
+ *            (e.g. {"result": {"category": "docs"}}). The grader is generic:
+ *            every key path in expected must match. null = unjudged sample.
+ *
+ * NOT triageResultSchema.partial(): that silently strips unknown keys, which
+ * erased the "result" wrapper on real data (verdicts all failed with
+ * "empty expected"). The worker is SUT-agnostic; so is this contract.
  */
 export const datasetItemPayloadSchema = z.object({
   input: triageRequestSchema,
-  expected: triageResultSchema.partial().nullable().default(null),
+  expected: z.record(z.string(), z.unknown()).nullable().default(null),
 });
 export type DatasetItemPayload = z.infer<typeof datasetItemPayloadSchema>;
 
@@ -24,6 +29,6 @@ export type DatasetCreate = z.infer<typeof datasetCreateSchema>;
 
 /** PATCH body for correcting an item's expected value (P5 flywheel entry). */
 export const itemCorrectionSchema = z.object({
-  expected: triageResultSchema.partial().nullable(),
+  expected: z.record(z.string(), z.unknown()).nullable(),
 });
 export type ItemCorrection = z.infer<typeof itemCorrectionSchema>;
