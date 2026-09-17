@@ -72,10 +72,12 @@ describe("alreadyTrialed", () => {
 });
 
 describe("formatTriageComment", () => {
-  it("includes verdict fields and the idempotency marker", () => {
+  it("中文回帖：包含判决字段、提议标签与幂等标记", () => {
     const body = formatTriageComment(verdict(), { model: "mock", latencyMs: 3 });
+    expect(body).toContain("自动分诊");
     expect(body).toContain("`bug`");
     expect(body).toContain("`high`");
+    expect(body).toContain("提议标签");
     expect(body).toContain("Crash on startup.");
     expect(body).toContain(TRIAGE_MARKER);
   });
