@@ -54,6 +54,7 @@ jobs:
           pnpm tsx scripts/eval-gate.mts > gate-report.txt 2>&1
           gate_code=$?
           set -e
+          cat gate-report.txt # stdout: `gh run view --log` cannot read summaries
           {
             echo "<!-- eval-gate -->"
             echo "## 📏 Eval Gate — \`${GATE_DATASET:-triage-zh-v1}\`"

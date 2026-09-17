@@ -6,7 +6,9 @@
  * Usage: OPENAI_API_KEY=... SUPABASE_DB_URL=... pnpm tsx scripts/eval-gate.mts
  * Exits 1 when accuracy < GATE_MIN_SCORE (default 80).
  */
-import { getLlmFromEnv, getSql, subsetMatch, triageIssue } from "@ai-eval/agent";
+
+import { getLlmFromEnv, subsetMatch, triageIssue } from "@ai-eval/agent";
+import { getSql } from "@ai-eval/db";
 
 const DATASET = process.env.GATE_DATASET ?? "triage-zh-v1";
 const MIN_SCORE = Number(process.env.GATE_MIN_SCORE ?? 80);
