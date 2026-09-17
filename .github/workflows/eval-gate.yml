@@ -63,11 +63,14 @@ jobs:
             echo '```'
             echo "_PR prompt code scored in-process; red below ${GATE_MIN_SCORE}%._"
           } > pr-comment.md
-          CID=$(gh api "repos/$REPO/issues/$NUMBER/comments" --jq '.[] | select(.body | contains("<!-- eval-gate -->")) | .id' | tail -1)
-          if [ -n "$CID" ]; then
-            gh api -X PATCH "repos/$REPO/issues/comments/$CID" -F body=@pr-comment.md >/dev/null
-          else
-            gh pr comment "$NUMBER" --body-file pr-comment.md >/dev/null
+          # dispatch runs have no PR number: the report lives in the job summary only
+          if [ -n "$NUMBER" ]; then
+            CID=$(gh api "repos/$REPO/issues/$NUMBER/comments" --jq '.[] | select(.body | contains("<!-- eval-gate -->")) | .id' | tail -1)
+            if [ -n "$CID" ]; then
+              gh api -X PATCH "repos/$REPO/issues/comments/$CID" -F body=@pr-comment.md >/dev/null
+            else
+              gh pr comment "$NUMBER" --body-file pr-comment.md >/dev/null
+            fi
           fi
           echo "gate_code=$gate_code" >> "$GITHUB_OUTPUT"
           cat gate-report.txt >> "$GITHUB_STEP_SUMMARY"
