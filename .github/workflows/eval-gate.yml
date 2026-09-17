@@ -24,6 +24,8 @@ jobs:
     timeout-minutes: 15
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+      TRIAGE_MODEL: ${{ vars.TRIAGE_MODEL }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       GATE_MIN_SCORE: "80"
     steps:
