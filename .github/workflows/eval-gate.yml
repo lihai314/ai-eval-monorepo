@@ -42,6 +42,7 @@ jobs:
         env:
           NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }} # gh api/pr comment need it inside workflows
         run: |
           set -uo pipefail
           if [ -z "${OPENAI_API_KEY:-}" ]; then
