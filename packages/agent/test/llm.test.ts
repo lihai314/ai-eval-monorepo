@@ -51,8 +51,8 @@ describe("createArkResponsesClient", () => {
   });
 });
 
-describe("getLlmFromEnv protocol switch", () => {
-  it("responses protocol emits json_schema from the triage contract", async () => {
+describe("getLlmFromEnv (responses hardcoded)", () => {
+  it("always uses the Ark Responses client with json_schema from the triage contract", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -61,19 +61,27 @@ describe("getLlmFromEnv protocol switch", () => {
     vi.stubGlobal("fetch", fetchMock);
     const client = getLlmFromEnv({
       OPENAI_API_KEY: "k",
-      TRIAGE_MODEL: "deepseek-v4.1-flash",
-      LLM_PROTOCOL: "responses",
+      OPENAI_BASE_URL: "https://ark.cn-beijing.volces.com/api/plan/v3",
+      TRIAGE_MODEL: "ark-code-latest",
     });
     await client.complete("p");
     const call = fetchMock.mock.calls.at(0);
     if (!call) throw new Error("fetch was not called");
-    const body = JSON.parse((call[1] as RequestInit).body as string);
+    const [url, init] = call;
+    expect(url).toBe("https://ark.cn-beijing.volces.com/api/plan/v3/responses");
+    const body = JSON.parse((init as RequestInit).body as string);
     expect(body.text.format.type).toBe("json_schema");
     expect(body.text.format.schema.properties.category).toBeDefined();
+    expect(body.store).toBe(false);
   });
 
-  it("defaults to the chat completions client", () => {
-    const client = getLlmFromEnv({ OPENAI_API_KEY: "k", TRIAGE_MODEL: "m" });
-    expect(client.model).toBe("m");
+  it("falls back to the plan gateway when base URL is absent", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(arkResponse('{"category":"chore"}'));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = getLlmFromEnv({ OPENAI_API_KEY: "k" });
+    await client.complete("p");
+    const call = fetchMock.mock.calls.at(0);
+    if (!call) throw new Error("fetch was not called");
+    expect(call[0]).toBe("https://ark.cn-beijing.volces.com/api/plan/v3/responses");
   });
 });
