@@ -1,0 +1,51 @@
+name: Correction Feedback
+
+# P5 flywheel: when a human changes labels on an auto-triaged issue, the
+# correction flows back into triage-zh-v1 as a corrected sample.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  correction:
+    name: Feed correction to dataset
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Skip non-category labels
+        id: gate
+        run: |
+          LABEL="${{ github.event.label.name }}"
+          case "$LABEL" in
+            bug|feature|docs|question|chore) echo "skip=false" >> "$GITHUB_OUTPUT";;
+            *) echo "skip=true" >> "$GITHUB_OUTPUT"; echo "not a category label ($LABEL) — skipping";;
+          esac
+
+      - name: POST correction to BFF
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          TRIAGE_URL: ${{ vars.TRIAGE_URL }}
+          CORRECTION_SECRET: ${{ secrets.CORRECTION_SECRET }}
+          PAYLOAD_JSON: ${{ toJson(github.event.issue) }}
+          LABEL: ${{ github.event.label.name }}
+        run: |
+          set -euo pipefail
+          PAYLOAD=$(ISSUE_JSON="$PAYLOAD_JSON" LABEL="$LABEL" node -e '
+            const i = JSON.parse(process.env.ISSUE_JSON);
+            process.stdout.write(JSON.stringify({
+              issueNumber: i.number,
+              title: i.title,
+              body: (i.body || "").slice(0, 8000),
+              labels: [process.env.LABEL, ...((i.labels || []).map(l => l.name))],
+            }));
+          ')
+          curl -sS -w "\nHTTP %{http_code}" --max-time 30 \
+            -X POST "$TRIAGE_URL/api/corrections" \
+            -H "authorization: Bearer $CORRECTION_SECRET" \
+            -H 'content-type: application/json' \
+            -d "$PAYLOAD"
