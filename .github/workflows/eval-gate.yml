@@ -16,6 +16,7 @@ on:
 permissions:
   contents: read
   issues: write
+  pull-requests: write # PR comments need this scope (issues:write covers issues only)
 
 jobs:
   gate:
