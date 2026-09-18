@@ -16,6 +16,7 @@ on:
 permissions:
   contents: read
   issues: write
+  pull-requests: write # PR comments need this scope (issues:write covers issues only)
 
 jobs:
   gate:
@@ -24,7 +25,6 @@ jobs:
     timeout-minutes: 15
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      LLM_PROTOCOL: ${{ vars.LLM_PROTOCOL }}
       OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
       TRIAGE_MODEL: ${{ vars.TRIAGE_MODEL }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -43,6 +43,7 @@ jobs:
         env:
           NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }} # gh api/pr comment need it inside workflows
         run: |
           set -uo pipefail
           if [ -z "${OPENAI_API_KEY:-}" ]; then

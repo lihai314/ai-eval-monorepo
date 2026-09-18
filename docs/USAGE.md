@@ -115,7 +115,8 @@ worker == 最后一次触碰 `workers/` 的提交；migrations 本地远端零�
    然后 `GH_OAUTH_CLIENT_ID=... GH_OAUTH_SECRET=*** .../setup-supabase-auth.sh`，
    并给两个 Vercel 项目设 `NEXT_PUBLIC_GITHUB_OAUTH=1`。
 3. **LLM key（P1，评测真实化的前提）**：给两个 Vercel 项目加
-   `OPENAI_API_KEY`（+可选 `OPENAI_BASE_URL`/`TRIAGE_MODEL`，Gemini 免费层兼容端点即可）；
+   `OPENAI_API_KEY`（+ `OPENAI_BASE_URL` = `https://ark.cn-beijing.volces.com/api/plan/v3`，
+   `TRIAGE_MODEL` = 方舟已开通的模型 ID 或接入点 ID）；
    `/api/health` 的 `llmMode` 会从 `mock` 变 `live`。worker 侧 DeepEval judge 同理
    （`pip install -e '.[judge]'` + `DEEPEVAL_ENABLED=1` + key）。
 

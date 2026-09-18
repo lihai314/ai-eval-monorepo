@@ -118,32 +118,27 @@ export interface LlmEnv {
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL?: string;
   TRIAGE_MODEL?: string;
-  /** "responses" -> Ark Responses API client; anything else -> chat completions. */
-  LLM_PROTOCOL?: string;
 }
 
-/** Key present -> real client; absent -> mock. Keeps P0 pipeline runnable
- *  while P1 can turn on real inference purely via env. The parameter is a
- *  plain string record so `process.env` is assignable without a cast. */
+/** Key present -> Ark Responses client (json_schema strict output); absent ->
+ *  mock. The protocol is an architecture decision baked into code, not an env
+ *  switch — LLM_PROTOCOL was removed after the plan-gateway migration. The
+ *  chat-completions client remains exported for other providers and tests.
+ *  The parameter is a plain string record so `process.env` is assignable
+ *  without a cast. */
 export function getLlmFromEnv(env: Record<string, string | undefined>): LlmClient {
   if (!env.OPENAI_API_KEY) {
     return createMockClient();
   }
-  const opts = {
+  return createArkResponsesClient({
     apiKey: env.OPENAI_API_KEY,
-    baseUrl: env.OPENAI_BASE_URL,
-    model: env.TRIAGE_MODEL ?? "gpt-4o-mini",
-  };
-  if (env.LLM_PROTOCOL === "responses") {
-    return createArkResponsesClient({
-      ...opts,
-      responseFormat: {
-        type: "json_schema",
-        name: "triage_result",
-        schema: z.toJSONSchema(triageResultSchema),
-        strict: true,
-      },
-    });
-  }
-  return createOpenAiCompatibleClient(opts);
+    baseUrl: env.OPENAI_BASE_URL ?? "https://ark.cn-beijing.volces.com/api/plan/v3",
+    model: env.TRIAGE_MODEL ?? "ark-code-latest",
+    responseFormat: {
+      type: "json_schema",
+      name: "triage_result",
+      schema: z.toJSONSchema(triageResultSchema),
+      strict: true,
+    },
+  });
 }
