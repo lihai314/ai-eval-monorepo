@@ -3,6 +3,10 @@
  * interface is deterministic and testable; swapping providers (or the future
  * Vercel AI SDK adapter) means implementing this interface once.
  */
+
+import { triageResultSchema } from "@ai-eval/shared";
+import { z } from "zod";
+
 export interface LlmClient {
   /** Model identifier reported to monitoring/eval so we know what produced a result. */
   readonly model: string;
@@ -49,6 +53,50 @@ export function createOpenAiCompatibleClient(opts: OpenAiCompatibleOptions): Llm
   };
 }
 
+/** Volcengine Ark Responses API client (POST /v3/responses). Non-streaming,
+ *  store:false — verdicts live in our own DB, not Ark's. The json_schema
+ *  response format makes the model emit schema-conforming JSON directly,
+ *  removing the regex-extract + retry path of chat completions. */
+export interface ArkResponsesOptions extends OpenAiCompatibleOptions {
+  /** `text.format` body — e.g. json_schema for strict structured output. */
+  responseFormat: Record<string, unknown>;
+}
+
+export function createArkResponsesClient(opts: ArkResponsesOptions): LlmClient {
+  const baseUrl = (opts.baseUrl ?? "https://ark.cn-beijing.volces.com/api/v3").replace(/\/$/, "");
+  return {
+    model: opts.model,
+    async complete(prompt: string): Promise<string> {
+      const res = await fetch(`${baseUrl}/responses`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${opts.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: opts.model,
+          input: prompt,
+          temperature: 0,
+          store: false,
+          text: { format: opts.responseFormat },
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`LLM request failed: ${res.status} ${await res.text()}`);
+      }
+      const data = (await res.json()) as {
+        output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
+      };
+      const message = data.output?.find((o) => o.type === "message");
+      const text = message?.content?.find((c) => c.type === "output_text")?.text;
+      if (typeof text !== "string") {
+        throw new Error("LLM response contained no output_text");
+      }
+      return text;
+    },
+  };
+}
+
 /** Deterministic stand-in used in tests and in deployments without an API key,
  *  so the pipeline (deploy/smoke) never depends on a live LLM. */
 export function createMockClient(): LlmClient {
@@ -70,6 +118,8 @@ export interface LlmEnv {
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL?: string;
   TRIAGE_MODEL?: string;
+  /** "responses" -> Ark Responses API client; anything else -> chat completions. */
+  LLM_PROTOCOL?: string;
 }
 
 /** Key present -> real client; absent -> mock. Keeps P0 pipeline runnable
@@ -79,9 +129,21 @@ export function getLlmFromEnv(env: Record<string, string | undefined>): LlmClien
   if (!env.OPENAI_API_KEY) {
     return createMockClient();
   }
-  return createOpenAiCompatibleClient({
+  const opts = {
     apiKey: env.OPENAI_API_KEY,
     baseUrl: env.OPENAI_BASE_URL,
     model: env.TRIAGE_MODEL ?? "gpt-4o-mini",
-  });
+  };
+  if (env.LLM_PROTOCOL === "responses") {
+    return createArkResponsesClient({
+      ...opts,
+      responseFormat: {
+        type: "json_schema",
+        name: "triage_result",
+        schema: z.toJSONSchema(triageResultSchema),
+        strict: true,
+      },
+    });
+  }
+  return createOpenAiCompatibleClient(opts);
 }
