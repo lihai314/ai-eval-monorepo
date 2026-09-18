@@ -1,0 +1,41 @@
+name: Admin — Sync CORRECTION_SECRET to Vercel
+
+# One-off admin utility: pushes the repo secret CORRECTION_SECRET into both
+# Vercel projects so the /api/corrections BFF route can authenticate the
+# correction.yml webhook. Re-run after rotating the secret.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: staging
+            token_secret: VERCEL_TOKEN
+            project_id_secret: VERCEL_PROJECT_ID_STAGING
+          - project: production
+            token_secret: VERCEL_TOKEN_PROD
+            project_id_secret: VERCEL_PROJECT_ID_PRODUCTION
+    steps:
+      - name: Upsert CORRECTION_SECRET on Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets[matrix.token_secret] }}
+          PROJECT_ID: ${{ secrets[matrix.project_id_secret] }}
+          VALUE: ${{ secrets.CORRECTION_SECRET }}
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /tmp/resp.json -w '%{http_code}' \
+            -X POST "https://api.vercel.com/v9/projects/${PROJECT_ID}/env?upsert=true" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            -H 'content-type: application/json' \
+            -d "{\"key\":\"CORRECTION_SECRET\",\"value\":\"${VALUE}\",\"type\":\"encrypted\",\"target\":[\"production\",\"preview\"]}")
+          echo "${{ matrix.project }}: HTTP ${code}"
+          if [ "$code" != "200" ]; then cat /tmp/resp.json; exit 1; fi
