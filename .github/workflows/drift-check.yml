@@ -79,10 +79,36 @@ jobs:
           echo "drift=${DRIFT# }" >> "$GITHUB_OUTPUT"
           echo "summary=$GITHUB_STEP_SUMMARY" >> "$GITHUB_ENV"
 
+      - name: Check Vercel env manifest
+        id: envcheck
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN_PROD: ${{ secrets.VERCEL_TOKEN_PROD }}
+          PROJECT_ID_STAGING: ${{ secrets.VERCEL_PROJECT_ID_STAGING }}
+          PROJECT_ID_PROD: ${{ secrets.VERCEL_PROJECT_ID_PRODUCTION }}
+        run: |
+          set -uo pipefail
+          ENV_DRIFT=""
+          run_check() {
+            local name="$1" tok="$2" pid="$3"
+            local out
+            if out=$(PROJECT_ID="$pid" VERCEL_TOKEN="$tok" PROJECT_NAME="$name" node scripts/reconcile-vercel-env.mjs verify 2>&1); then
+              echo "$out"
+              echo "$out" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "$out"
+              echo "$out" >> "$GITHUB_STEP_SUMMARY"
+              ENV_DRIFT="$ENV_DRIFT $name($out)"
+            fi
+          }
+          run_check staging "$VERCEL_TOKEN" "$PROJECT_ID_STAGING"
+          run_check production "$VERCEL_TOKEN_PROD" "$PROJECT_ID_PROD"
+          echo "env_drift=${ENV_DRIFT# }" >> "$GITHUB_OUTPUT"
+
       - name: File or heal drift issue
         env:
           GH_TOKEN: ${{ github.token }}
-          DRIFT: ${{ steps.check.outputs.drift }}
+          DRIFT: "${{ steps.check.outputs.drift }} ${{ steps.envcheck.outputs.env_drift }}"
           MAIN: ${{ github.sha }}
         run: |
           set -uo pipefail

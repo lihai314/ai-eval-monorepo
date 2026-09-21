@@ -47,6 +47,18 @@ async function resolve(source) {
 
 const envs = await listEnv();
 
+// verify mode: exit 1 listing manifest keys missing from the project (drift-check)
+if (process.argv[2] === "verify") {
+  const keys = new Set(envs.map((e) => e.key));
+  const missing = manifest.variables.map((v) => v.key).filter((k) => !keys.has(k));
+  if (missing.length) {
+    console.log(`${project} MISSING from Vercel: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+  console.log(`${project} env manifest ok (${manifest.variables.length} keys)`);
+  process.exit(0);
+}
+
 if (reportOnly) {
   console.log(`${project} current env (value = first 6 chars):`);
   for (const e of envs) {
