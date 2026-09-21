@@ -1,5 +1,5 @@
 {
-  "$comment": "Vercel env as-code (#62). Each entry: key = Vercel env var name; source = where the value comes from (secret:<GitHub secret>, variable:<GitHub variable>, constant:<literal>, supabase:anon = Supabase Management API); target/type = what Vercel stores. Reconciled by scripts/reconcile-vercel-env.mjs via admin-vercel-env.yml. Vars NOT listed (NEXT_PUBLIC_GITHUB_OAUTH, PG_DSN) are left untouched until their source value is declared here.",
+  "$comment": "Vercel env as-code (#62). Each entry: key = Vercel env var name; source = where the value comes from (secret:<GitHub secret>, variable:<GitHub variable>, constant:<literal>, supabase:anon = Supabase Management API); target/type = what Vercel stores. Reconciled by scripts/reconcile-vercel-env.mjs via admin-vercel-env.yml. Vars NOT listed (NEXT_PUBLIC_GITHUB_OAUTH) are left untouched until their source value is declared here.",
   "variables": [
     {
       "key": "OPENAI_API_KEY",
@@ -42,6 +42,12 @@
       "source": "supabase:anon",
       "target": ["production"],
       "type": "encrypted"
+    },
+    {
+      "key": "PG_DSN",
+      "source": "secret:SUPABASE_DB_URL",
+      "target": ["production"],
+      "type": "sensitive"
     }
   ]
 }

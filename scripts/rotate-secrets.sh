@@ -60,8 +60,7 @@ read -rsp '   paste new DSN (hidden; Enter to skip): ' db
 echo
 if [ -n "$db" ]; then
   set_secret SUPABASE_DB_URL "$db"
-  echo -e "${YEL}   ⚠️  Vercel PG_DSN is NOT as-code yet — update it in Vercel manually,"
-  echo -e "   or add PG_DSN to infra/vercel-env-manifest.json (source secret:SUPABASE_DB_URL).${NC}"
+  echo -e "${GRN}   ✔ PG_DSN on Vercel + Render both source from SUPABASE_DB_URL — no manual step.${NC}"
 fi
 
 echo

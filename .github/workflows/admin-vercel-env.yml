@@ -48,4 +48,5 @@ jobs:
           TRIAGE_MODEL: ${{ vars.TRIAGE_MODEL }}
           JEV_API_KEY: ${{ secrets.JEV_API_KEY }}
           CORRECTION_SECRET: ${{ secrets.CORRECTION_SECRET }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: node scripts/reconcile-vercel-env.mjs
