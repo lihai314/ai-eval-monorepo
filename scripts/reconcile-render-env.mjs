@@ -26,7 +26,12 @@ async function getServiceId() {
   const j = await r.json();
   const services = Array.isArray(j) ? j : (j.services ?? []);
   const found = services.find((s) => s.name === serviceName);
-  if (!found) throw new Error(`service '${serviceName}' not found`);
+  if (!found) {
+    const names = services.slice(0, 20).map((s) => `${s.name}(${s.id})`).join(", ");
+    throw new Error(
+      `service '${serviceName}' not found; first=${names || "(empty)"} raw=${JSON.stringify(services).slice(0, 800)}`,
+    );
+  }
   return found.id;
 }
 
