@@ -24,10 +24,14 @@ async function getServiceId() {
   const r = await fetch(`${API}/services`, { headers: auth });
   if (!r.ok) throw new Error(`list services failed: ${r.status} ${await r.text()}`);
   const j = await r.json();
-  const services = Array.isArray(j) ? j : (j.services ?? []);
+  // Response is an array of {cursor, service}; unwrap to the service objects.
+  const services = Array.isArray(j) ? j.map((s) => s.service ?? s) : (j.services ?? []);
   const found = services.find((s) => s.name === serviceName);
   if (!found) {
-    const names = services.slice(0, 20).map((s) => `${s.name}(${s.id})`).join(", ");
+    const names = services
+      .slice(0, 20)
+      .map((s) => `${s.name}(${s.id})`)
+      .join(", ");
     throw new Error(
       `service '${serviceName}' not found; first=${names || "(empty)"} raw=${JSON.stringify(services).slice(0, 800)}`,
     );
