@@ -7,6 +7,11 @@ name: Admin — Sync repo secrets to Vercel
 
 on:
   workflow_dispatch:
+    inputs:
+      report:
+        description: "Only list current env vars, never write"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,14 +31,24 @@ jobs:
             token_secret: VERCEL_TOKEN_PROD
             project_id_secret: VERCEL_PROJECT_ID_PRODUCTION
     steps:
-      - name: Upsert secrets on Vercel
+      - name: Reconcile secrets on Vercel
         env:
           VERCEL_TOKEN: ${{ secrets[matrix.token_secret] }}
           PROJECT_ID: ${{ secrets[matrix.project_id_secret] }}
+          REPORT: ${{ inputs.report }}
           CORRECTION_SECRET: ${{ secrets.CORRECTION_SECRET }}
           JEV_API_KEY: ${{ secrets.JEV_API_KEY }}
         run: |
           set -euo pipefail
+          list_envs() {
+            curl -s -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              "https://api.vercel.com/v9/projects/${PROJECT_ID}/env"
+          }
+          if [ "${REPORT}" = "true" ]; then
+            echo "${{ matrix.project }} current env (value = first 6 chars):"
+            list_envs | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);for(const e of (j.envs||[])){const v=e.value??'';console.log('  '+e.key+' target='+JSON.stringify(e.target)+' type='+e.type+' value='+(v.length>6?v.slice(0,6)+'...':v))}})"
+            exit 0
+          fi
           for key in CORRECTION_SECRET JEV_API_KEY; do
             value="${!key}"
             if [ -z "${value}" ]; then
