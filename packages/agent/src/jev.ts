@@ -7,7 +7,8 @@
  * free-text answer type, so no rationale/reason output either).
  *
  * Protocol mirrors TypeSafe's System One; docs at https://jev-ai.pro/jev-api
- * (POST /api/v1/systemone, Bearer auth). #62
+ * (base URL defaults to https://jev-ai.pro/api; endpoints under it are
+ * /v1/systemone, /v1/credits, /v1/models — Bearer auth). #62
  */
 
 import { z } from "zod";
@@ -67,7 +68,7 @@ export async function callSystemOne(
 ): Promise<JevResult> {
   const baseUrl = (opts.baseUrl ?? "https://jev-ai.pro/api").replace(/\/$/, "");
   const model = opts.model ?? "jev-latest";
-  const res = await fetch(`${baseUrl}/api/v1/systemone`, {
+  const res = await fetch(`${baseUrl}/v1/systemone`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -90,7 +91,7 @@ export async function callSystemOne(
 /** Balance in credits. Free credits are spent first at 1 credit/call. */
 export async function getJevCredits(apiKey: string, baseUrl?: string): Promise<number> {
   const base = (baseUrl ?? "https://jev-ai.pro/api").replace(/\/$/, "");
-  const res = await fetch(`${base}/api/v1/credits`, {
+  const res = await fetch(`${base}/v1/credits`, {
     headers: { authorization: `Bearer ${apiKey}` },
   });
   if (!res.ok) {
@@ -102,7 +103,7 @@ export async function getJevCredits(apiKey: string, baseUrl?: string): Promise<n
 
 export async function listJevModels(apiKey: string, baseUrl?: string): Promise<string[]> {
   const base = (baseUrl ?? "https://jev-ai.pro/api").replace(/\/$/, "");
-  const res = await fetch(`${base}/api/v1/models`, {
+  const res = await fetch(`${base}/v1/models`, {
     headers: { authorization: `Bearer ${apiKey}` },
   });
   if (!res.ok) {
