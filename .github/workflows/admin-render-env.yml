@@ -1,0 +1,32 @@
+name: Admin — Reconcile Render env from GitHub (as-code)
+
+# Admin utility: reconciles the eval-worker service's env vars from
+# infra/render-env-manifest.json; values come from GitHub secrets. Re-run
+# after rotating a secret or editing the manifest. REPORT=true lists the
+# service id + current env without writing. #62
+
+on:
+  workflow_dispatch:
+    inputs:
+      report:
+        description: "Only list service + env vars, never write"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconcile Render env from manifest
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          REPORT: ${{ inputs.report }}
+          EVAL_WORKER_TOKEN: ${{ secrets.EVAL_WORKER_TOKEN }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node scripts/reconcile-render-env.mjs

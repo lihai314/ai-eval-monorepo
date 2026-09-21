@@ -1,0 +1,8 @@
+{
+  "$comment": "Render eval-worker env as-code (#62). source names a GitHub secret injected by admin-render-env.yml. Reconciled by scripts/reconcile-render-env.mjs (PUT upserts per key).",
+  "service": "eval-worker",
+  "variables": [
+    { "key": "WORKER_TOKEN", "source": "secret:EVAL_WORKER_TOKEN" },
+    { "key": "PG_DSN", "source": "secret:SUPABASE_DB_URL" }
+  ]
+}
