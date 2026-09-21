@@ -40,11 +40,25 @@ jobs:
               echo "${{ matrix.project }} ${key}: not set on GitHub — skipping"
               continue
             fi
-            code=$(curl -s -o /tmp/resp.json -w '%{http_code}' \
-              -X POST "https://api.vercel.com/v9/projects/${PROJECT_ID}/env?upsert=true" \
-              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
-              -H 'content-type: application/json' \
-              -d "{\"key\":\"${key}\",\"value\":\"${value}\",\"type\":\"encrypted\",\"target\":[\"production\",\"preview\"]}")
+            # Reconcile, don't upsert: POST ?upsert=true does NOT update an
+            # existing var (Vercel returns ENV_ALREADY_EXISTS, learned on #62).
+            # Find the env id, then PATCH if present, POST if absent.
+            existing=$(curl -s -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              "https://api.vercel.com/v9/projects/${PROJECT_ID}/env" |
+              node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);const e=(j.envs||[]).find(x=>x.key===process.argv[1]);console.log(e?e.id:'')})" "$key")
+            if [ -n "$existing" ]; then
+              code=$(curl -s -o /tmp/resp.json -w '%{http_code}' -X PATCH \
+                "https://api.vercel.com/v9/projects/${PROJECT_ID}/env/${existing}" \
+                -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                -H 'content-type: application/json' \
+                -d "{\"value\":\"${value}\",\"type\":\"encrypted\",\"target\":[\"production\",\"preview\"]}")
+            else
+              code=$(curl -s -o /tmp/resp.json -w '%{http_code}' -X POST \
+                "https://api.vercel.com/v9/projects/${PROJECT_ID}/env" \
+                -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                -H 'content-type: application/json' \
+                -d "{\"key\":\"${key}\",\"value\":\"${value}\",\"type\":\"encrypted\",\"target\":[\"production\",\"preview\"]}")
+            fi
             echo "${{ matrix.project }} ${key}: HTTP ${code}"
-            if [ "$code" != "200" ]; then cat /tmp/resp.json; exit 1; fi
+            if [ "$code" != "200" ] && [ "$code" != "201" ]; then cat /tmp/resp.json; exit 1; fi
           done
