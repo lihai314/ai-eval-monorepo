@@ -1,0 +1,47 @@
+{
+  "$comment": "Vercel env as-code (#62). Each entry: key = Vercel env var name; source = where the value comes from (secret:<GitHub secret>, variable:<GitHub variable>, constant:<literal>, supabase:anon = Supabase Management API); target/type = what Vercel stores. Reconciled by scripts/reconcile-vercel-env.mjs via admin-vercel-env.yml. Vars NOT listed (NEXT_PUBLIC_GITHUB_OAUTH, PG_DSN) are left untouched until their source value is declared here.",
+  "variables": [
+    {
+      "key": "OPENAI_API_KEY",
+      "source": "secret:OPENAI_API_KEY",
+      "target": ["production"],
+      "type": "sensitive"
+    },
+    {
+      "key": "OPENAI_BASE_URL",
+      "source": "variable:OPENAI_BASE_URL",
+      "target": ["production"],
+      "type": "sensitive"
+    },
+    {
+      "key": "TRIAGE_MODEL",
+      "source": "variable:TRIAGE_MODEL",
+      "target": ["production"],
+      "type": "sensitive"
+    },
+    {
+      "key": "JEV_API_KEY",
+      "source": "secret:JEV_API_KEY",
+      "target": ["production", "preview"],
+      "type": "encrypted"
+    },
+    {
+      "key": "CORRECTION_SECRET",
+      "source": "secret:CORRECTION_SECRET",
+      "target": ["production", "preview"],
+      "type": "encrypted"
+    },
+    {
+      "key": "NEXT_PUBLIC_SUPABASE_URL",
+      "source": "constant:https://snxliarypkeuzvecjnfy.supabase.co",
+      "target": ["production"],
+      "type": "encrypted"
+    },
+    {
+      "key": "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "source": "supabase:anon",
+      "target": ["production"],
+      "type": "encrypted"
+    }
+  ]
+}
