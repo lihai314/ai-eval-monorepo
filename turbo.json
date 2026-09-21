@@ -4,7 +4,16 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**"],
-      "env": ["GIT_SHA", "GIT_BRANCH", "OPENAI_API_KEY", "OPENAI_BASE_URL", "TRIAGE_MODEL", "JEV_API_KEY", "JEV_BASE_URL", "JEV_MODEL"]
+      "env": [
+        "GIT_SHA",
+        "GIT_BRANCH",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "TRIAGE_MODEL",
+        "JEV_API_KEY",
+        "JEV_BASE_URL",
+        "JEV_MODEL"
+      ]
     },
     "typecheck": {
       "dependsOn": ["^typecheck"]
