@@ -54,7 +54,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
                 <span
                   style={{
                     color:
-                      r.verdict === "pass" ? "#1a7f37" : r.verdict === "fail" ? "#b60200" : "#777",
+                      r.verdict === "pass" ? "#1a7f37" : r.verdict === "fail" ? "#b60200" : "#777", // pending | skipped (unjudged: no expected)
                   }}
                 >
                   {r.verdict}
@@ -67,7 +67,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           ))}
         </tbody>
       </table>
-      <RunPoller id={run.id} done={run.judged >= run.items && run.items > 0} />
+      <RunPoller id={run.id} done={run.judged >= run.items} />
     </main>
   );
 }

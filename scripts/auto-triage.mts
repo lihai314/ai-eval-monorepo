@@ -8,7 +8,8 @@
  * job and files nothing — a wrong-but-plausible comment on a real issue is
  * worse than a red workflow run (see docs/PIPELINE.md).
  *
- * Env: REPO, TRIAGE_URL, GH_TOKEN, ISSUE_JSON (github.event.issue as JSON).
+ * Env: REPO, TRIAGE_URL, GH_TOKEN, ISSUE_JSON (github.event.issue as JSON),
+ *      TRIAGE_TOKEN (optional, forwarded when /api/triage enforces it).
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -20,7 +21,7 @@ import {
 } from "@ai-eval/agent";
 import type { TriageResult } from "@ai-eval/shared";
 
-const { REPO, TRIAGE_URL, ISSUE_JSON } = process.env;
+const { REPO, TRIAGE_URL, ISSUE_JSON, TRIAGE_TOKEN } = process.env;
 if (!REPO || !TRIAGE_URL || !ISSUE_JSON) {
   throw new Error("REPO, TRIAGE_URL and ISSUE_JSON are required");
 }
@@ -51,7 +52,10 @@ const payload = issueToTriageRequest(issue);
 console.log(`triaging #${issue.number} via ${TRIAGE_URL}`);
 const res = await fetch(`${TRIAGE_URL}/api/triage`, {
   method: "POST",
-  headers: { "content-type": "application/json" },
+  headers: {
+    "content-type": "application/json",
+    ...(TRIAGE_TOKEN ? { authorization: `Bearer ${TRIAGE_TOKEN}` } : {}),
+  },
   body: JSON.stringify(payload),
   signal: AbortSignal.timeout(60_000),
 });

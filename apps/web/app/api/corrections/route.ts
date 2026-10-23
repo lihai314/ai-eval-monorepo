@@ -1,4 +1,5 @@
 import { deriveExpected, upsertCorrection } from "@ai-eval/db";
+import { bearerMatches } from "@/lib/bearer";
 
 /** Correction feedback webhook: called by correction.yml on issue label changes.
  *  Auth: Bearer CORRECTION_SECRET (shared with the GitHub workflow).
@@ -6,7 +7,12 @@ import { deriveExpected, upsertCorrection } from "@ai-eval/db";
 
 export async function POST(request: Request): Promise<Response> {
   const secret = process.env.CORRECTION_SECRET;
-  if (secret && request.headers.get("authorization") !== `Bearer ${secret}`) {
+  // Fail closed. Previously an unset secret left this write endpoint wide
+  // open to anyone who could POST a dataset correction.
+  if (!secret) {
+    return Response.json({ error: "CORRECTION_SECRET is not configured" }, { status: 503 });
+  }
+  if (!bearerMatches(request.headers.get("authorization"), secret)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 

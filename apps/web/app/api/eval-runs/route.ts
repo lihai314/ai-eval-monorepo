@@ -1,7 +1,14 @@
 import { createEvalRun, listRuns } from "@ai-eval/db";
+import { after } from "next/server";
 import { currentUser } from "@/lib/supabase/server";
+import { wakeWorker } from "@/lib/wake-worker";
 
 export async function GET(): Promise<Response> {
+  // Run detail includes per-item model output; the console gates on login, so
+  // the API must too (it used to be readable anonymously).
+  if (!(await currentUser())) {
+    return Response.json({ error: "unauthenticated" }, { status: 401 });
+  }
   try {
     return Response.json({ runs: await listRuns() });
   } catch (err) {
@@ -21,6 +28,10 @@ export async function POST(request: Request): Promise<Response> {
       return Response.json({ error: "datasetName (string) is required" }, { status: 400 });
     }
     const result = await createEvalRun(datasetName);
+    // Wake the worker now instead of waiting up to 30 minutes for the cron.
+    // `after` runs once the response is flushed, so a cold Render start
+    // (~1 min) doesn't hold the user's request open.
+    after(() => wakeWorker());
     return Response.json(result, { status: 201 });
   } catch (err) {
     return respond(err);

@@ -5,7 +5,7 @@
 import type postgres from "postgres";
 import { getSql } from "./runs";
 
-const DATASET = "triage-zh-v1";
+const DEFAULT_DATASET = "triage-zh-v1";
 const CATEGORIES = ["bug", "feature", "docs", "question", "chore"] as const;
 const SEVERITIES = ["low", "medium", "high", "critical"] as const;
 
@@ -28,14 +28,20 @@ export function deriveExpected(
   return { category, ...(sev ? { severity: sev } : {}) };
 }
 
+/** Dataset corrections land in. Overridable so forks aren't tied to one name. */
+export function correctionDataset(): string {
+  return process.env.CORRECTION_DATASET ?? DEFAULT_DATASET;
+}
+
 /** Upsert a correction into the designated dataset.
  *  Matches by input->>'issueNumber' within the dataset (not by UUID — the
  *  caller identifies items by GitHub issue number, which is the natural key). */
 export async function upsertCorrection(payload: CorrectionPayload): Promise<"created" | "updated"> {
   const s = getSql();
+  const dataset = correctionDataset();
   const [ds] =
-    await s`select id from datasets where name = ${DATASET} order by version desc limit 1`;
-  if (!ds) throw new Error(`correction dataset '${DATASET}' not found`);
+    await s`select id from datasets where name = ${dataset} order by version desc limit 1`;
+  if (!ds) throw new Error(`correction dataset '${dataset}' not found`);
 
   const expected: Record<string, unknown> = { result: { category: payload.category } };
   if (payload.severity)
@@ -68,5 +74,3 @@ export async function upsertCorrection(payload: CorrectionPayload): Promise<"cre
     values (${ds.id}, ${input as unknown as postgres.Parameter}, ${expected as unknown as postgres.Parameter}, 'corrected')`;
   return "created";
 }
-
-export { DATASET as CORRECTION_DATASET };

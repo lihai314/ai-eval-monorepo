@@ -19,9 +19,13 @@ tests/             pytest on fakes — no LLM key, no DB, no queue needed
 
 ```bash
 uv run --extra test pytest            # tests (memory adapters only)
-DEEPEVAL_ENABLED=0 uv run --extra serve uvicorn app.main:app --port 8000
-curl -X POST localhost:8000/drain -d '{"limit":10}' -H 'content-type: application/json'
+WORKER_TOKEN=local-dev DEEPEVAL_ENABLED=0 uv run --extra serve uvicorn app.main:app --port 8000
+curl -X POST localhost:8000/drain -d '{"limit":10}' \
+  -H 'content-type: application/json' -H 'authorization: Bearer local-dev'
 ```
+
+`/drain` fails closed: without `WORKER_TOKEN` it returns 503 instead of running
+open to the internet.
 
 ## Deploy (Render, free web service)
 
@@ -39,4 +43,6 @@ curl -X POST localhost:8000/drain -d '{"limit":10}' -H 'content-type: applicatio
 | --- | --- |
 | SUT transport failure | message NOT archived → pgmq re-delivers after visibility timeout |
 | judged (pass or fail) | result row upserted, message archived |
+| no ground truth (`expected` null/empty) | verdict `skipped` (unjudged, not failed), archived |
 | judge crash | error recorded in scores, archived anyway (no queue wedge) |
+| every save | recomputes `eval_runs.totals` and closes the run (`done` + `finished_at`) |
