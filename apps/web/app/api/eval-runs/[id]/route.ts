@@ -1,9 +1,13 @@
 import { getRunDetail } from "@ai-eval/db";
+import { currentUser } from "@/lib/supabase/server";
 
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
+  if (!(await currentUser())) {
+    return Response.json({ error: "unauthenticated" }, { status: 401 });
+  }
   const { id } = await context.params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) {
     return Response.json({ error: "invalid run id" }, { status: 400 });

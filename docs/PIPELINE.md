@@ -12,7 +12,7 @@ GitHub Issue → Branch → Pull Request → CI (lint ∥ unit ∥ api → build
 
 ### Issue
 - **Runs it**: humans via `.github/ISSUE_TEMPLATE/` (bug / feature); every new issue is then
-  auto-classified by the production agent (`triage.yml` → `scripts/auto-triage.ts` →
+  auto-classified by the production agent (`triage.yml` → `scripts/auto-triage.mts` →
   `TRIAGE_URL/api/triage` → comment + labels). Labels are applied from the repo whitelist only.
 - **Passing means**: work has a number to reference; `Fixes #N` closes it; the agent's verdict
   lands on the issue within a minute.
@@ -88,7 +88,8 @@ node scripts/smoke.mjs                                # BASE_URL=... GIT_SHA=...
 
 ## Batch 2 backlog (stubbed, in build order)
 
-1. **Agent Evaluation** — `packages/eval` dataset + graders; extra CI job that runs when
+1. **Agent Evaluation** — dataset + graders live in `packages/agent` (subset grader) and
+   `workers/eval` (Python judges); extra CI job that runs when
    `packages/agent/**/prompt*` or model config changes; gate on regression vs baseline.
    Dataset seeds itself from live triage verdicts + human label corrections (#5 shipped).
 2. **Trace** — Langfuse wrapper around `LlmClient` (the seam in `packages/agent/src/llm.ts`

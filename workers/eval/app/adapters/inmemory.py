@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
-from ..protocols import EvalTask, Judge, ResultStore, SutClient, TaskQueue
+from ..protocols import EvalTask, Judge, ResultStore, SutClient, TaskQueue, verdict_for
 
 
 class MemoryQueue:
@@ -48,7 +48,7 @@ class MemoryStore:
                 "item_id": task.item_id,
                 "output": output,
                 "scores": scores,
-                "verdict": "pass" if all(s.get("passed") for s in scores) else "fail",
+                "verdict": verdict_for(scores),
             }
         )
 
@@ -80,11 +80,15 @@ class ExactMatchJudge:
     ) -> dict[str, Any]:
         expected = task.expected or {}
         if not expected:
+            # Production samples arrive with expected=null; they are unjudged,
+            # not wrong. Recording them as `fail` silently depressed every
+            # score (and made "skipped" indistinguishable from "incorrect").
             return {
                 "metric": "exact_match",
                 "score": 0.0,
                 "passed": False,
-                "reason": "empty expected — nothing to assert",
+                "skipped": True,
+                "reason": "unjudged — expected is null/empty",
             }
         ok, missing = _subset(expected, output)
         return {

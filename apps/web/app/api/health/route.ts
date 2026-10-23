@@ -11,6 +11,9 @@ export async function GET(): Promise<Response> {
     gitSha: process.env.GIT_SHA ?? "dev",
     gitBranch: process.env.GIT_BRANCH ?? "unknown",
     llmMode: process.env.OPENAI_API_KEY ? "live" : "mock",
+    // Operability flags: both webhooks are secure-by-default when configured.
+    triageAuth: process.env.TRIAGE_TOKEN ? "on" : "off",
+    workerWired: Boolean(process.env.WORKER_URL),
     checkedAt: new Date().toISOString(),
   });
 }
