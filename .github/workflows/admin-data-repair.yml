@@ -51,11 +51,11 @@ jobs:
           APPLY: ${{ inputs.apply }}
         run: |
           set -euo pipefail
-          ARGS=""
           if [ "$ACTION" = "backfill" ] && [ "$APPLY" = "true" ]; then
-            ARGS="--apply"
+            pnpm tsx scripts/backfill-eval-runs.mts --apply
+          else
+            pnpm tsx scripts/backfill-eval-runs.mts
           fi
-          pnpm tsx scripts/backfill-eval-runs.mts $ARGS
 
       - name: Preview or remove accidental corrected sample
         if: inputs.action == 'remove-corrected'
@@ -69,8 +69,8 @@ jobs:
             echo "::error::item_id is required for remove-corrected"
             exit 1
           fi
-          ARGS="--id=$ITEM_ID"
           if [ "$APPLY" = "true" ]; then
-            ARGS="$ARGS --apply"
+            pnpm tsx scripts/remove-corrected-sample.mts --id="$ITEM_ID" --apply
+          else
+            pnpm tsx scripts/remove-corrected-sample.mts --id="$ITEM_ID"
           fi
-          pnpm tsx scripts/remove-corrected-sample.mts $ARGS

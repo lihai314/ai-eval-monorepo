@@ -69,13 +69,28 @@ if (reportOnly) {
 
 const missing = [];
 for (const v of manifest.variables) {
-  const value = await resolve(v.source);
+  const existing = envs.find((e) => e.key === v.key);
+  let value;
+  try {
+    value = await resolve(v.source);
+  } catch (err) {
+    // A broken optional source (e.g. Supabase Management API 401) must not
+    // block syncing unrelated keys when the var already exists remotely.
+    if (existing) {
+      console.log(
+        `${project} ${v.key}: kept (source unavailable — ${err instanceof Error ? err.message : "error"})`,
+      );
+      continue;
+    }
+    missing.push(v.key);
+    console.log(missingSource(project, v.key));
+    continue;
+  }
   if (!value) {
     missing.push(v.key);
     console.log(missingSource(project, v.key));
     continue;
   }
-  const existing = envs.find((e) => e.key === v.key);
   const url = existing ? `${API}/${projectId}/env/${existing.id}` : `${API}/${projectId}/env`;
   const body = existing
     ? { value, type: v.type, target: v.target }

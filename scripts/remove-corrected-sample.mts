@@ -45,7 +45,8 @@ try {
       and input->>'title' like ${LIKE}`;
 
   console.log(`mode=${apply ? "APPLY" : "PREVIEW"} id=${itemId} matched=${rows.length}`);
-  for (const r of rows) console.log(`  ${r.id} provenance=${r.provenance} title=${String(r.title)}`);
+  for (const r of rows)
+    console.log(`  ${r.id} provenance=${r.provenance} title=${String(r.title)}`);
 
   if (!apply) {
     console.log("PREVIEW only — no rows deleted. Re-run with --apply to commit.");
