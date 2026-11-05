@@ -1,0 +1,50 @@
+name: PR Governance
+
+# Single-maintainer repos cannot produce a genuine "non-author approval".
+# This replaces that unenforceable rule with an executable PR governance gate:
+# every PR must state what changed, how it was verified, the risk/rollback, and
+# reference an issue (or explicitly declare NO-ISSUE). See docs/USAGE.md §10.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  governance:
+    name: PR Governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate PR description
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          BODY=$(gh api "repos/$REPO/pulls/$NUMBER" --jq '.body // ""')
+          failed=0
+          if ! grep -qiE '## What|## 变更' <<< "$BODY"; then
+            echo "::error::PR description missing a What / 变更 section"
+            failed=1
+          fi
+          if ! grep -qiE 'How to verify|## 验证|验证' <<< "$BODY"; then
+            echo "::error::PR description missing verification evidence"
+            failed=1
+          fi
+          if ! grep -qiE 'risk|rollback|风险|回滚' <<< "$BODY"; then
+            echo "::error::PR description missing risk and rollback"
+            failed=1
+          fi
+          if ! grep -qE 'Fixes #[0-9]+|Refs #[0-9]+|NO-ISSUE' <<< "$BODY"; then
+            echo "::error::PR must reference an issue (Fixes #N / Refs #N) or state NO-ISSUE"
+            failed=1
+          fi
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
+          echo "PR governance: description complete (what / verify / risk / issue)" >> "$GITHUB_STEP_SUMMARY"

@@ -143,3 +143,32 @@ worker == 最后一次触碰 `workers/` 的提交；migrations 本地远端零�
 - run 状态由 worker 收口（`queued → running → done`，`totals` 含 items/judged/passed/skipped/failed）
 - Playwright e2e、Sentry、OTel 在 PLAN 的 P6/P7，尚未接线
 - free 档限制：worker 冷启动 ~1min；Supabase 7 天不动休眠（看门狗保活）；LLM 并发=1；每次 drain 处理条数有限，大 run 需多轮
+- `/api/health` 的 `llmMode=live` 只表示 key 已配置，**不代表订阅/额度可用**；`llmProbe=not-attempted` 明示未做模型探测
+
+## 9. 常见问题（历史 issue 收口）
+
+| 问题 | 答案 |
+|---|---|
+| 自建/本地模型怎么接（#9） | 设 `OPENAI_API_KEY`（非空占位）、`OPENAI_BASE_URL`、`TRIAGE_MODEL`，代码读取点在 `packages/agent/src/llm.ts:135`。**注意**当前客户端走方舟 Responses 协议（`/responses`），自建端点需兼容该协议；Ollama 原生 `/v1/chat/completions` 不兼容，需扩展 `LlmClient`。`/api/triage` 启用 `TRIAGE_TOKEN` 后还需 Bearer。 |
+| triage prompt 在哪个文件（#13） | prompt 拼装在 `packages/agent/src/triage-writer.ts`，分类输出契约与白名单校验在 `packages/agent/src/triage.ts`，LLM 客户端在 `packages/agent/src/llm.ts`。 |
+| 评测并发为什么是 1、怎么改（#46） | `workers/eval/app/core.py` 的 drain 循环串行处理队列；这是 PLAN §7 的免费档 RPM + Render 单实例约束。要调大需同时改 drain 循环的并发度与限流/退避策略，并确认 provider 配额；不是单个环境变量开关。 |
+| jev-ai 接入做了吗（#62） | System One 结构化问答客户端已交付：`packages/agent/src/jev.ts`（经 `index.ts` 导出）、`scripts/jev-smoke.mts` 可验证，`JEV_API_KEY` 已在 Vercel manifest。「廉价判官预筛实验」尚未接入评测 worker，属后续实验项，不影响现有链路。 |
+| eval-plane 架构状态（#16） | 已落地：Vercel BFF → Supabase `pgmq` 队列 → Render Python worker（httpx + 可选 DeepEval）→ SUT；见 PLAN v2.1 §0 与 `workers/eval/README.md`。 |
+| 登录空密码 500（#7） | 当前登录是 magic link / GitHub OAuth，**没有密码字段**；已补邮箱格式校验，空或非法输入不会提交到认证服务。 |
+| smoke 冷启动偶发失败（#11） | `scripts/smoke.mjs` 现默认 20 次尝试、指数退避（上限 15s）、单次探测 20s，可用 `SMOKE_ATTEMPTS` / `SMOKE_DELAY_MS` / `SMOKE_TIMEOUT_MS` 覆盖。 |
+| smoke 机器可读输出（#12） | `BASE_URL=... node scripts/smoke.mjs --json` 输出单行 JSON（含 ok / gitSha / attempts / error），便于定时任务入库。 |
+| 深色模式（#48） | 页面右上角提供明暗切换，跟随系统主题并写入 `localStorage`，刷新保持；实现见 `apps/web/components/ThemeToggle.tsx` 与 `apps/web/app/layout.tsx`。 |
+
+## 10. 单人仓库的治理模型
+
+本仓库目前只有一位维护者，GitHub 不允许作者审批自己的 PR，因此 `required_approving_review_count=1` 只会产生 `REVIEW_REQUIRED` 而无法真正形成非作者审查（历史上只能以 `--admin` 绕过）。现行模型改为**可执行、不自相矛盾**的控制：
+
+| 控制 | 状态 |
+|---|---|
+| 五项 CI required contexts（Lint & Typecheck / Unit / API / Worker / Build） | 强制，`strict=true` |
+| `PR Governance`（`.github/workflows/pr-governance.yml`） | 强制校验 PR 描述的 What / 验证 / 风险与回滚 / issue 关联 |
+| `enforce_admins` | 开启：管理员同样受上述检查约束，不再有 `--admin` 绕过 |
+| `required_approving_review_count` | 0：不保留无法生效的假门禁 |
+| `production` environment | required reviewer 审批后才可发布 |
+
+局限（如实记录）：单账号仓库**无法产生真正的非作者代码审查**；上述是自动化质量门禁 + 发布审批，不等价于第二人审阅。若引入第二位 reviewer，可把 `required_approving_review_count` 调回 1 并重新验证阻断效果。
