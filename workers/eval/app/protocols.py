@@ -16,6 +16,19 @@ class SutTransportError(Exception):
     (not archived) so pgmq's visibility timeout re-delivers it."""
 
 
+def verdict_for(scores: list[dict[str, Any]]) -> str:
+    """pass | fail | skipped for one item.
+
+    A sample with no ground truth is *unjudged*, not failed: skipped metric
+    scores are excluded, and an item whose metrics are all skipped is
+    `skipped`. Otherwise every remaining metric must have passed.
+    """
+    judged = [s for s in scores if not s.get("skipped")]
+    if not judged:
+        return "skipped"
+    return "pass" if all(s.get("passed") for s in judged) else "fail"
+
+
 @dataclass(slots=True)
 class EvalTask:
     """One unit of work: grade SUT(output(input)) against expected, per metric."""

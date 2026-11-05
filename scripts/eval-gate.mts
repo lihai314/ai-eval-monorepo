@@ -17,14 +17,29 @@ const sql = getSql();
 const [ds] =
   await sql`select id, name from datasets where name = ${DATASET} order by version desc limit 1`;
 if (!ds) throw new Error(`dataset not found: ${DATASET}`);
-const items = await sql`
+const allItems = await sql`
   select id, input, expected from dataset_items where dataset_id = ${ds.id} order by created_at`;
+
+// Unjudged samples (expected = null or {}) must not be scored: counting them
+// as failures depressed the score, and counting them as passes would let an
+// empty dataset turn the gate green.
+const items = allItems.filter((it) => {
+  const expected = it.expected as Record<string, unknown> | null;
+  return expected !== null && typeof expected === "object" && Object.keys(expected).length > 0;
+});
 
 // --- SUT = the PR's own agent code, in-process (no HTTP, no deploy) ---
 const llm = getLlmFromEnv(process.env);
+const skipped = allItems.length - items.length;
 console.log(
-  `eval-gate: dataset=${DATASET} (${items.length} items) model=${llm.model} sut=in-process(packages/agent@HEAD)`,
+  `eval-gate: dataset=${DATASET} (${items.length} judged, ${skipped} skipped) model=${llm.model} sut=in-process(packages/agent@HEAD)`,
 );
+if (items.length === 0) {
+  // Explicit red: NaN used to compare false against the threshold, silently
+  // passing a gate that scored nothing.
+  console.error(`eval-gate: no judged items in ${DATASET} — cannot score`);
+  process.exit(1);
+}
 
 const rows: Array<{ title: string; category: string; passed: boolean; reason: string }> = [];
 for (const it of items) {
@@ -68,5 +83,7 @@ for (const r of rows) {
     `${r.passed ? "PASS" : "FAIL"} | ${r.category.padEnd(8)} | ${r.title.slice(0, 40)} | ${r.reason}`,
   );
 }
-console.log(`SCORE: ${passed}/${rows.length} = ${score}% (threshold ${MIN_SCORE}%)`);
+console.log(
+  `SCORE: ${passed}/${rows.length} = ${score}% (threshold ${MIN_SCORE}%, skipped ${skipped})`,
+);
 if (score < MIN_SCORE) process.exit(1);

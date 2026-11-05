@@ -32,6 +32,24 @@
       "type": "encrypted"
     },
     {
+      "key": "TRIAGE_TOKEN",
+      "source": "secret:TRIAGE_TOKEN",
+      "target": ["production"],
+      "type": "sensitive"
+    },
+    {
+      "key": "WORKER_URL",
+      "source": "variable:WORKER_URL",
+      "target": ["production"],
+      "type": "sensitive"
+    },
+    {
+      "key": "EVAL_WORKER_TOKEN",
+      "source": "secret:EVAL_WORKER_TOKEN",
+      "target": ["production"],
+      "type": "sensitive"
+    },
+    {
       "key": "NEXT_PUBLIC_SUPABASE_URL",
       "source": "constant:https://snxliarypkeuzvecjnfy.supabase.co",
       "target": ["production"],

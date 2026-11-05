@@ -30,8 +30,8 @@ export default async function Home({
       <UserBar email={user} />
       <p>
         Agent evaluation platform: a run fans dataset items onto <code>pgmq.eval_tasks</code>; the
-        Render worker drains on the 30-min heartbeat and scores against the production SUT. ·{" "}
-        <Link href="/datasets">Manage datasets →</Link>
+        BFF wakes the Render worker immediately (30-min cron as backstop) and it scores each item
+        against the production SUT. · <Link href="/datasets">Manage datasets →</Link>
       </p>
 
       {dbError ? (

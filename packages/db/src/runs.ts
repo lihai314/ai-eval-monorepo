@@ -101,28 +101,49 @@ export async function createEvalRun(
   const [agent] = await s`
     select id from agents order by created_at desc limit 1`;
   if (!agent) throw new Error("no agents registered");
+  // `queued` until the worker writes its first result; the worker flips it to
+  // running/done (see workers/eval/app/adapters/pg.py). It used to be created
+  // as `running` and then never updated, so every run looked stuck.
   const [run] = await s`
     insert into eval_runs (agent_id, dataset_id, status, started_at)
-    values (${agent.id}, ${ds.id}, 'running', now()) returning id`;
+    values (${agent.id}, ${ds.id}, 'queued', now()) returning id`;
   if (!run) throw new Error("failed to create eval_run row");
   const items = await s`select id, input, expected from dataset_items where dataset_id = ${ds.id}`;
-  const sutBaseUrl = process.env.SUT_BASE_URL ?? "https://ai-eval-production-lihai314.vercel.app";
-  for (const it of items) {
-    const msg = buildTaskMessage({
+  const sutBaseUrl = sutBaseUrlFromEnv();
+  const messages = items.map((it) =>
+    buildTaskMessage({
       runId: String(run.id),
       itemId: String(it.id),
       input: it.input as Record<string, unknown>,
       expected: (it.expected as Record<string, unknown>) ?? null,
       sutBaseUrl,
-    });
-    // Pass the object directly: postgres.js serializes JS objects to jsonb.
-    // `${JSON.stringify(msg)}::jsonb` DOUBLE-ENCODES into a jsonb string
-    // scalar (verified: jsonb_typeof = 'string'), which the worker then
-    // receives as a str — found by the first BFF-driven run.
-    await s`SELECT pgmq.send(${QUEUE_NAME}, ${msg as unknown as postgres.Parameter}, 0)`;
+    }),
+  );
+  if (messages.length > 0) {
+    // One round-trip instead of N: a 500-item dataset used to cost 500
+    // sequential sends inside a single serverless invocation. The payload is
+    // sent as a JSON array and expanded server-side into jsonb[]; passing
+    // objects individually through ::jsonb double-encoded them (see git
+    // history) — keeping the array as one JSON document avoids that trap.
+    const payload = JSON.stringify(messages);
+    await s`SELECT pgmq.send_batch(${QUEUE_NAME}, ARRAY(SELECT jsonb_array_elements(${payload}::jsonb)), 0)`;
   }
   await s`update eval_runs set totals = ${{ items: items.length } as unknown as postgres.Parameter} where id = ${run.id}`;
-  return { runId: String(run.id), enqueued: items.length };
+  if (items.length === 0) {
+    // No worker will ever pick this up, so close it here instead of leaving a
+    // `queued` run that the UI polls forever.
+    await s`update eval_runs set status = 'done', finished_at = now() where id = ${run.id}`;
+  }
+  return { runId: String(run.id), enqueued: messages.length };
+}
+
+/** The system under test: explicit env wins, else this deployment's own
+ *  production domain (Vercel injects it), else local dev. */
+function sutBaseUrlFromEnv(): string {
+  if (process.env.SUT_BASE_URL) return process.env.SUT_BASE_URL;
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+  if (vercel) return `https://${vercel}`;
+  return "http://localhost:3000";
 }
 
 function toSummary(r: Record<string, unknown>): RunSummary {

@@ -3,6 +3,9 @@ import { datasetCreateSchema } from "@ai-eval/shared";
 import { currentUser } from "@/lib/supabase/server";
 
 export async function GET(): Promise<Response> {
+  if (!(await currentUser())) {
+    return Response.json({ error: "unauthenticated" }, { status: 401 });
+  }
   try {
     return Response.json({ datasets: await getDatasetsSummary() });
   } catch (err) {

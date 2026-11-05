@@ -36,3 +36,13 @@ def test_drain_requires_bearer(app_with_token):
     ok = client.post("/drain", json={"limit": 5}, headers={"Authorization": "Bearer sekret"})
     assert ok.status_code == 200
     assert ok.json()["tasks_seen"] == 0  # fresh memory queue
+
+
+def test_drain_fails_closed_without_configured_token(monkeypatch):
+    monkeypatch.delenv("WORKER_TOKEN", raising=False)
+    monkeypatch.delenv("PG_DSN", raising=False)
+    from app.main import create_app
+
+    client = TestClient(create_app())
+    # No token configured means "not configured", never "open to the world".
+    assert client.post("/drain", json={}).status_code == 503

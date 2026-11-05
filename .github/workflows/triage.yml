@@ -29,6 +29,7 @@ jobs:
         env:
           REPO: ${{ github.repository }}
           TRIAGE_URL: ${{ vars.TRIAGE_URL }}
+          TRIAGE_TOKEN: ${{ secrets.TRIAGE_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_JSON: ${{ toJson(github.event.issue) }}
         # .mts: root package.json is CJS (no "type": "module"); tsx picks the

@@ -1,7 +1,15 @@
 import { getLlmFromEnv, TriageParseError, triageIssue } from "@ai-eval/agent";
 import { triageRequestSchema } from "@ai-eval/shared";
+import { bearerMatches } from "@/lib/bearer";
 
 export async function POST(request: Request): Promise<Response> {
+  // This is the eval SUT and a live LLM call: when TRIAGE_TOKEN is set, only
+  // the GitHub workflow (auto-triage.mts) may spend model credits on it.
+  const triageToken = process.env.TRIAGE_TOKEN;
+  if (triageToken && !bearerMatches(request.headers.get("authorization"), triageToken)) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   let body: unknown;
   try {
     body = await request.json();

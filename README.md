@@ -13,12 +13,14 @@ Architecture & phases: [PLAN.md](PLAN.md) · Pipeline stages: [docs/PIPELINE.md]
 ## Repo layout
 
 ```
-apps/web          Next.js app — UI + /api/health + /api/triage (deployed on Vercel)
+apps/web          Next.js app — UI + /api/{health,triage,datasets,eval-runs,corrections} (Vercel)
 packages/shared   zod schemas & contracts (API ⇄ agent ⇄ eval all speak this)
 packages/agent    triage agent: prompt, LLM client seam, strict output validation
+packages/db       SQL layer: datasets, runs (pgmq fan-out), corrections
 workers/eval      Python eval worker (Render, pull-pattern /drain) — see workers/eval/README.md
 supabase/         config.toml + migrations/ + seeds/ — the control plane, as code
-scripts/          smoke.mjs · auto-triage.mts · setup-vercel.sh
+scripts/          smoke.mjs · auto-triage.mts · eval-gate.mts · drift/reconcile helpers
+infra/            env manifests (Vercel/Render as code, verified by drift-check)
 render.yaml       Blueprint definition for the eval worker (free web service)
 .github/          workflows (ci / deploy-staging / release-production / triage / db-migrate / drain-eval) + templates
 docs/PIPELINE.md  stage-by-stage map of the pipeline
@@ -43,13 +45,26 @@ Every moving part is declared in this repo; the platforms just execute it:
 
 ```bash
 pnpm install          # Node >= 20, pnpm 10
-cp .env.example .env.local   # optional — mock LLM works with no key
+cp .env.example .env.local   # mock LLM works with no key; PG_DSN unlocks the data plane
 pnpm dev              # apps/web on http://localhost:3000
 pnpm lint             # biome check
 pnpm test             # turbo run test (unit + api)
 pnpm build            # turbo run build
 pnpm smoke            # BASE_URL=https://... node scripts/smoke.mjs
 ```
+
+### Access control (secure by default)
+
+- Console pages and **all read APIs** require a Supabase session (401 otherwise).
+- `/api/triage` requires `Authorization: Bearer $TRIAGE_TOKEN` once the env var is set;
+  `triage.yml` forwards `secrets.TRIAGE_TOKEN`.
+- `/api/corrections` **fails closed**: without `CORRECTION_SECRET` it returns 503.
+- The worker's `/drain` **fails closed** without `WORKER_TOKEN`.
+- `/api/health` reports `triageAuth` and `workerWired` so both knobs are observable.
+- The BFF wakes `/drain` right after enqueueing only when `WORKER_URL` + `EVAL_WORKER_TOKEN`
+  are set (declared in `infra/vercel-env-manifest.json`); the 30-min cron is the backstop.
+- One-time activation: `gh secret set TRIAGE_TOKEN` + reconcile Vercel env
+  (`admin-vercel-env.yml`) so the token is provisioned on both sides.
 
 ## Delivery pipeline (one screen)
 

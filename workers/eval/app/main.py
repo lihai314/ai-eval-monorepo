@@ -8,6 +8,7 @@ Wiring: PG_DSN present -> pgmq + eval_results; absent -> in-memory demo mode.
 
 from __future__ import annotations
 
+import hmac
 import os
 import pathlib
 import re
@@ -87,7 +88,11 @@ def create_app() -> FastAPI:
 
     def require_drain_token(authorization: str = Header(default="")) -> None:
         expected = os.environ.get("WORKER_TOKEN", "")
-        if expected and authorization != f"Bearer {expected}":
+        # Fail closed: an unset token must not turn a billable drain endpoint
+        # into an open one (render.yaml declares it required).
+        if not expected:
+            raise HTTPException(status_code=503, detail="WORKER_TOKEN is not configured")
+        if not hmac.compare_digest(authorization, f"Bearer {expected}"):
             raise HTTPException(status_code=401, detail="missing or bad bearer token")
 
     @app.post("/drain", dependencies=[Depends(require_drain_token)])

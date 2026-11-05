@@ -13,7 +13,7 @@ from app.core import drain
 from app.protocols import EvalTask, SutTransportError
 
 
-def task(msg_id: int, item_id: str, expected: dict[str, Any]) -> EvalTask:
+def task(msg_id: int, item_id: str, expected: dict[str, Any] | None) -> EvalTask:
     return EvalTask(
         msg_id=msg_id,
         run_id="run-1",
@@ -106,6 +106,26 @@ def test_exact_match_number_string_equivalence_and_missing_keys():
     assert "severity" in miss["reason"] and "extra" in miss["reason"]
 
 
-def test_exact_match_empty_expected_fails():
-    assert _grade({}, {"a": 1})["passed"] is False
-    assert _grade(None, {"a": 1})["passed"] is False
+def test_exact_match_empty_expected_is_skipped_not_failed():
+    # expected=null means "unjudged production sample", not "wrong answer".
+    for empty in ({}, None):
+        score = _grade(empty, {"a": 1})
+        assert score["skipped"] is True
+        assert score["passed"] is False
+
+
+def test_all_skipped_metrics_store_verdict_skipped():
+    q = MemoryQueue([task(1, "a", None)])
+    store = MemoryStore()
+    drain(q, store, StubSut({"a": {"category": "bug"}}), CompositeJudge([ExactMatchJudge()]))
+
+    assert q.archived == [1]  # processed, so the run can finish
+    assert store.rows[0]["verdict"] == "skipped"
+
+
+def test_mixed_skip_and_pass_verdict_is_pass():
+    from app.protocols import verdict_for
+
+    assert verdict_for([{"passed": False, "skipped": True}, {"passed": True}]) == "pass"
+    assert verdict_for([{"passed": False, "skipped": True}, {"passed": False}]) == "fail"
+    assert verdict_for([]) == "skipped"

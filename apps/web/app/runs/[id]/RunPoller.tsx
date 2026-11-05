@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 
-/** Refreshes while the Render heartbeat drains the queue (30-min cadence —
- *  the poller is cheap and the page is honest about waiting). */
+/** Refreshes while the worker drains the queue — woken by the BFF right after
+ *  enqueueing, with the 30-min cron as backstop. The poller is cheap. */
 export default function RunPoller({ done }: { id: string; done: boolean }) {
   useEffect(() => {
     if (done) return;
@@ -13,7 +13,9 @@ export default function RunPoller({ done }: { id: string; done: boolean }) {
 
   return (
     <p style={{ color: "#777" }}>
-      {done ? "run complete." : "waiting for the next worker drain (auto-refresh every 10s)…"}
+      {done
+        ? "run complete."
+        : "waiting for the worker to drain the queue (auto-refresh every 10s)…"}
     </p>
   );
 }

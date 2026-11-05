@@ -13,7 +13,7 @@ from typing import Any
 import psycopg  # psycopg3, [binary] extra
 from psycopg.rows import dict_row
 
-from ..protocols import EvalTask, SutTransportError  # noqa: F401  (re-export guard)
+from ..protocols import EvalTask, SutTransportError, verdict_for  # noqa: F401  (re-export guard)
 
 
 class PgmqQueue:
@@ -55,7 +55,7 @@ class SupabaseResultStore:
         self._dsn = dsn
 
     def save(self, task: EvalTask, output: dict[str, Any], scores: list[dict[str, Any]]) -> None:
-        verdict = "pass" if scores and all(s.get("passed") for s in scores) else "fail"
+        verdict = verdict_for(scores)
         with psycopg.connect(self._dsn, autocommit=True) as conn, conn.cursor() as cur:
             cur.execute(
                 """
@@ -67,6 +67,33 @@ class SupabaseResultStore:
                 """,
                 (task.run_id, task.item_id, _jsonb(output), _jsonb(scores), verdict),
             )
+            # Close the run out: totals for the dashboard, `done` once every
+            # item has a row. Without this the row stayed `running` forever and
+            # finished_at was never written (nothing else updates eval_runs).
+            cur.execute(_RUN_TOTALS, (task.run_id,) * 5)
+
+
+_RUN_TOTALS = """
+WITH target AS (SELECT dataset_id FROM eval_runs WHERE id = %s),
+stats AS (
+  SELECT
+    (SELECT count(*)::int FROM dataset_items i WHERE i.dataset_id = target.dataset_id) AS items,
+    (SELECT count(*)::int FROM eval_results WHERE run_id = %s) AS judged,
+    (SELECT count(*)::int FROM eval_results WHERE run_id = %s AND verdict = 'pass') AS passed,
+    (SELECT count(*)::int FROM eval_results WHERE run_id = %s AND verdict = 'skipped') AS skipped,
+    (SELECT count(*)::int FROM eval_results WHERE run_id = %s AND verdict = 'fail') AS failed
+  FROM target
+)
+UPDATE eval_runs r
+   SET totals = jsonb_build_object(
+         'items', stats.items, 'judged', stats.judged,
+         'passed', stats.passed, 'skipped', stats.skipped, 'failed', stats.failed),
+       status = CASE WHEN stats.judged >= stats.items THEN 'done' ELSE 'running' END,
+       finished_at = CASE WHEN stats.judged >= stats.items
+                          THEN coalesce(r.finished_at, now()) ELSE NULL END
+  FROM stats
+ WHERE r.id = %s
+"""
 
 
 def _task_from_row(msg_id: int, message: dict[str, Any] | str) -> EvalTask:

@@ -11,8 +11,8 @@
                 │ SQL（PG_DSN）
                 ▼
         Supabase  eval-hub            Auth · PostgreSQL(5表) · pgmq 队列 eval_tasks
-                │ pgmq.send（BFF 扇出）
-                ▼   ▲ 拉取：GHA cron /drain（每30min）+ 手动
+                │ pgmq.send_batch（BFF 一次往返扇出）
+                ▼   ▲ 拉取：BFF 入队后立即唤醒 /drain；GHA cron（每30min）兜底
         Render  eval-worker (Python)   drain 队列 → httpx 调 SUT → 打分 → 写结果
                 │ HTTP
                 ▼
@@ -41,14 +41,16 @@ worker 服务由 `render.yaml` 声明；看门狗每日证明"线上 == 仓库"�
 
 ### 2.2 跑一次评测
 1. 打开控制台 → 选数据集 → **▶ Run eval**
-2. 页面跳转 `/runs/<id>`，每条样本一行：`pending → pass/fail`（worker 被心跳唤醒后自动刷新，最长等 30 分钟；想立刻跑见 2.4）
-3. 点开某行看 output/scores 明细（exact_match 是子集断言：expected 只写要断言的字段）
+2. 页面跳转 `/runs/<id>`，每条样本一行：`pending → pass/fail/skipped`
+   （BFF 入队后立即唤醒 worker，页面自动刷新；30 分钟 cron 只是兜底。`skipped` = 无 expected 的未标注样本）
+3. 表格里直接看每条 scores（exact_match 是子集断言：expected 只写要断言的字段）；
+   `eval_results.output` 保留完整被测输出，需要细节时用 SQL 查
 
 API 等价：
 ```bash
 curl -b cookiejar -X POST $P/api/eval-runs -H 'content-type: application/json' \
   -d '{"datasetName":"e2e-smoke"}'          # → {runId, enqueued:N}
-curl $P/api/eval-runs/<runId>               # 进度 + 逐条结果
+curl -b cookiejar $P/api/eval-runs/<runId>  # 进度 + 逐条结果（读接口同样要求登录）
 ```
 
 ### 2.3 issue 自动分诊（评测数据来源）
@@ -56,7 +58,7 @@ curl $P/api/eval-runs/<runId>               # 进度 + 逐条结果
 category/severity/摘要 + 自动打 label（只打仓库词表里存在的 label）。
 **不同意就改 label**——纠正记录将来回流成评测样本（P5）。
 
-### 2.4 立即触发 drain（不等 30 分钟心跳）
+### 2.4 手动触发 drain（兜底 / 排障）
 ```bash
 gh workflow run "Drift Watchdog"        # 不是这个——看门狗只检查不排空
 gh workflow run "Drain Eval Queue"      # ✅ 唤醒 worker 并排空队列
@@ -125,7 +127,10 @@ worker == 最后一次触碰 `workers/` 的提交；migrations 本地远端零�
 | 症状 | 先看 | 常见原因 |
 |---|---|---|
 | 控制台显示 DB unavailable | Vercel 项目 env `PG_DSN` | 未配/被改；`scripts/setup-vercel.sh` |
-| run 一直 pending | `gh run list --workflow "Drain Eval Queue"`；worker `/healthz` | 心跳没跑/worker 冷启动（free 档 15min 休眠，正常） |
+| API 返回 401 unauthenticated | 会话 cookie / Supabase 配置 | 读接口现在要求登录；重新登录 |
+| `/api/triage` 返回 401 | `TRIAGE_TOKEN` | GitHub secret 与 Vercel env 不一致 |
+| `/api/corrections` 返回 503 | `CORRECTION_SECRET` | 未配置即拒绝写入（fail closed） |
+| run 一直 pending | `/api/health` 的 `workerWired`；worker `/healthz` | `WORKER_URL` 未配/唤醒失败（cron 兜底）；worker 冷启动 ~1min |
 | drain 502 | 502 的 detail 自带原因 | 之前真实案例：密码串复制进 `%`、jsonb 双重编码 |
 | 看门狗开 issue | 该 run 的 summary 表 | 真旁路部署/dashboard 改库；或 Release 没点（prod 落后是**预期**，基线已处理） |
 | CI 红 | `gh pr checks <n>` | 五门禁逐 job 看日志 |
@@ -133,7 +138,8 @@ worker == 最后一次触碰 `workers/` 的提交；migrations 本地远端零�
 
 ## 8. 当前边界（诚实清单）
 
-- agent 是 **mock**（未配 LLM key）：链路真实、智能占位
-- 数据集/纠正回流 UI 未做（P3/P5）：现在用 SQL/pgmq.send 或 e2e-smoke 演示集
+- 未配 LLM key 时 agent 走 **mock**：链路真实、智能占位（`/api/health` 的 `llmMode` 可查）
+- 数据集 UI 与逐条纠正已上线；GitHub label 纠正经 `correction.yml` 自动回流到 `CORRECTION_DATASET`
+- run 状态由 worker 收口（`queued → running → done`，`totals` 含 items/judged/passed/skipped/failed）
 - Playwright e2e、Sentry、OTel 在 PLAN 的 P6/P7，尚未接线
-- free 档限制：worker 冷启动 ~1min；Supabase 7 天不动休眠（看门狗保活）；LLM 并发=1
+- free 档限制：worker 冷启动 ~1min；Supabase 7 天不动休眠（看门狗保活）；LLM 并发=1；每次 drain 处理条数有限，大 run 需多轮
