@@ -93,7 +93,12 @@ def _grade(expected, output):  # noqa: ANN001
 def test_exact_match_is_subset_not_full_equality():
     # SUT responses carry wrapper fields (model/latencyMs); expected asserts a
     # partial view — including a nested path.
-    out = {"issueNumber": 1, "model": "mock", "latencyMs": 2, "result": {"category": "docs", "severity": "low"}}
+    out = {
+        "issueNumber": 1,
+        "model": "mock",
+        "latencyMs": 2,
+        "result": {"category": "docs", "severity": "low"},
+    }
     assert _grade({"result": {"category": "docs"}}, out)["passed"] is True
     assert _grade({"result": {"category": "bug"}}, out)["passed"] is False
     assert _grade({"result": {"category": "docs"}, "model": "mock"}, out)["passed"] is True

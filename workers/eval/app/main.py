@@ -16,9 +16,6 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 
-from .core import drain
-from .protocols import Judge
-
 from .adapters.http_sut import HttpSutClient
 from .adapters.inmemory import (
     CompositeJudge,
@@ -26,6 +23,8 @@ from .adapters.inmemory import (
     MemoryQueue,
     MemoryStore,
 )
+from .core import drain
+from .protocols import Judge
 
 APP_VERSION = "0.1.0"
 
@@ -40,6 +39,7 @@ def _commit() -> str:
         return (pathlib.Path(__file__).parent / "commit.txt").read_text().strip() or "dev"
     except FileNotFoundError:
         return "dev"
+
 
 # postgresql://user:password@host/db -> postgresql://user:***@host/db (truncated)
 _DSN_PW = re.compile(r"://([^:/@]+):[^@]*@")

@@ -48,7 +48,9 @@ class TaskQueue(Protocol):
 
 
 class ResultStore(Protocol):
-    def save(self, task: EvalTask, output: dict[str, Any], scores: list[dict[str, Any]]) -> None: ...
+    def save(
+        self, task: EvalTask, output: dict[str, Any], scores: list[dict[str, Any]]
+    ) -> None: ...
 
 
 class SutClient(Protocol):
