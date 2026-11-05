@@ -14,3 +14,8 @@ dist/
 __pycache__/
 *.pyc
 workers/*/*.egg-info/
+
+# local agent workspaces / analysis artifacts (not source)
+.manus/
+.work/
+.workbuddy/
