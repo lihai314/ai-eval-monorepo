@@ -10,6 +10,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { describeEnv, missingSource, safeHttpError } from "./lib/env-report.mjs";
 
 const token = process.env.VERCEL_TOKEN ?? "";
 const projectId = process.env.PROJECT_ID ?? "";
@@ -24,7 +25,7 @@ const auth = { authorization: `Bearer ${token}` };
 
 async function listEnv() {
   const r = await fetch(`${API}/${projectId}/env`, { headers: auth });
-  if (!r.ok) throw new Error(`list env failed: ${r.status} ${await r.text()}`);
+  if (!r.ok) throw new Error(safeHttpError("list env failed", r.status));
   const j = await r.json();
   return j.envs ?? [];
 }
@@ -36,7 +37,7 @@ async function resolve(source) {
       `https://api.supabase.com/v1/projects/${process.env.SUPABASE_PROJECT_REF}/api-keys`,
       { headers: { authorization: `Bearer ${process.env.SUPABASE_ACCESS_TOKEN}` } },
     );
-    if (!r.ok) throw new Error(`supabase api-keys failed: ${r.status}`);
+    if (!r.ok) throw new Error(safeHttpError("supabase api-keys failed", r.status));
     const keys = await r.json();
     return keys.find((k) => k.name === "anon")?.api_key ?? "";
   }
@@ -60,20 +61,18 @@ if (process.argv[2] === "verify") {
 }
 
 if (reportOnly) {
-  console.log(`${project} current env (value = first 6 chars):`);
-  for (const e of envs) {
-    const v = e.value ?? "";
-    console.log(
-      `  ${e.key} target=${JSON.stringify(e.target)} type=${e.type} value=${v.length > 6 ? `${v.slice(0, 6)}...` : v}`,
-    );
-  }
+  // Read-only: only key names, targets and types. Never values or prefixes.
+  console.log(`${project} current env (metadata only, ${envs.length} keys):`);
+  for (const e of envs) console.log(describeEnv(e));
   process.exit(0);
 }
 
+const missing = [];
 for (const v of manifest.variables) {
   const value = await resolve(v.source);
   if (!value) {
-    console.log(`${project} ${v.key}: source empty — skipping`);
+    missing.push(v.key);
+    console.log(missingSource(project, v.key));
     continue;
   }
   const existing = envs.find((e) => e.key === v.key);
@@ -86,7 +85,13 @@ for (const v of manifest.variables) {
     headers: { ...auth, "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  const detail = r.status < 300 ? "" : ` ${(await r.text()).slice(0, 200)}`;
+  const detail = r.status < 300 ? "" : ` ${safeHttpError("write failed", r.status)}`;
   console.log(`${project} ${v.key}: HTTP ${r.status}${detail}`);
   if (r.status >= 300) process.exit(1);
+}
+if (missing.length) {
+  console.error(
+    `${project}: ${missing.length} manifest key(s) had no source (${missing.join(", ")}) — reconcile incomplete`,
+  );
+  process.exit(1);
 }
