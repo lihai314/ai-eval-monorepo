@@ -19,8 +19,31 @@ permissions:
   pull-requests: write # PR comments need this scope (issues:write covers issues only)
 
 jobs:
+  # A missing key must be reported as SKIPPED, never as a passing check.
+  # GitHub Actions cannot set a job's conclusion to `neutral` directly, so the
+  # scoring job is skipped and a dedicated job publishes an explicit SKIPPED
+  # report (summary + PR comment). The credential is read via env, never echoed.
+  precheck:
+    name: Eval Gate precheck
+    runs-on: ubuntu-latest
+    outputs:
+      has_key: ${{ steps.key.outputs.has_key }}
+    steps:
+      - name: Detect LLM credential
+        id: key
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -n "${OPENAI_API_KEY:-}" ]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+          fi
+
   gate:
     name: Eval Gate (triage-zh-v1)
+    needs: precheck
+    if: needs.precheck.outputs.has_key == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -46,14 +69,8 @@ jobs:
           GH_TOKEN: ${{ github.token }} # gh api/pr comment need it inside workflows
         run: |
           set -uo pipefail
-          if [ -z "${OPENAI_API_KEY:-}" ]; then
-            {
-              echo "## ⏭️ Eval Gate skipped"
-              echo ""
-              echo "\`OPENAI_API_KEY\` repo secret is not set — add the Ark key to enable automatic prompt scoring."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
+          # Only "no credential configured" is SKIPPED (handled by the
+          # `skipped` job). Auth/subscription/network failures still fail here.
           set +e
           pnpm tsx scripts/eval-gate.mts > gate-report.txt 2>&1
           gate_code=$?
@@ -80,3 +97,37 @@ jobs:
           echo "gate_code=$gate_code" >> "$GITHUB_OUTPUT"
           cat gate-report.txt >> "$GITHUB_STEP_SUMMARY"
           exit "$gate_code"
+
+  skipped:
+    name: Eval Gate — SKIPPED
+    needs: precheck
+    if: needs.precheck.outputs.has_key == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish explicit SKIPPED report
+        env:
+          NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          {
+            echo "## Eval Gate — SKIPPED"
+            echo ""
+            echo "\`OPENAI_API_KEY\` repo secret is not set. No model scoring ran."
+            echo "**This is not a passing score.** Configure the key to enable automatic prompt scoring."
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' '<!-- eval-gate -->' '## Eval Gate — SKIPPED' '' \
+            'OPENAI_API_KEY repo secret is not set; no model scoring ran.' \
+            '**This is not a passing score.**' > skipped-comment.md
+          # workflow_dispatch has no PR number: the job summary is the report.
+          if [ -n "${NUMBER:-}" ]; then
+            CID=$(gh api "repos/$REPO/issues/$NUMBER/comments" \
+              --jq '.[] | select(.body | contains("<!-- eval-gate -->")) | .id' | tail -1)
+            if [ -n "$CID" ]; then
+              gh api -X PATCH "repos/$REPO/issues/comments/$CID" \
+                -F body=@skipped-comment.md > /dev/null
+            else
+              gh pr comment "$NUMBER" --repo "$REPO" --body-file skipped-comment.md > /dev/null
+            fi
+          fi
