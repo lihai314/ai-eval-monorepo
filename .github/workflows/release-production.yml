@@ -9,11 +9,15 @@ on:
     inputs:
       confirm_sha:
         description: "Commit SHA to release (must be the one that passed staging smoke)"
-        required: false
-        default: ""
+        required: true
+        type: string
 
 concurrency:
   group: deploy-production
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   production:
@@ -28,14 +32,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Guard — release the SHA that passed staging
-        if: ${{ github.event.inputs.confirm_sha != '' }}
+      - name: Guard — release only a staging-verified SHA
+        id: guard
+        env:
+          CONFIRM_SHA: ${{ inputs.confirm_sha }}
+          HEAD_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
-          if [ "${{ github.event.inputs.confirm_sha }}" != "${{ github.sha }}" ]; then
-            echo "::error::confirm_sha (${{ github.event.inputs.confirm_sha }}) is not HEAD of main (${{ github.sha }})"
+          set -uo pipefail
+          if [ -z "${CONFIRM_SHA:-}" ]; then
+            echo "::error::confirm_sha is empty — a release must name a staging-verified commit"
             exit 1
           fi
-          echo "🔒 releasing verified commit ${{ github.sha }}"
+          if [ "$CONFIRM_SHA" != "$HEAD_SHA" ]; then
+            echo "::error::confirm_sha ($CONFIRM_SHA) is not the workflow HEAD ($HEAD_SHA)"
+            exit 1
+          fi
+          MATCHES=$(gh run list --repo "$REPO" --workflow "Deploy Staging" \
+            --status success --limit 100 --json headSha,conclusion \
+            --jq --arg sha "$CONFIRM_SHA" '[.[] | select(.headSha == $sha and .conclusion == "success")] | length')
+          if [ "${MATCHES:-0}" -lt 1 ]; then
+            echo "::error::no successful Deploy Staging run for $CONFIRM_SHA — refusing to promote"
+            exit 1
+          fi
+          echo "staging-verified SHA $CONFIRM_SHA ($MATCHES successful staging run(s))"
+          echo "verified_sha=$CONFIRM_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Bind Vercel project (production)
         run: |
@@ -82,7 +104,12 @@ jobs:
           {
             echo "## Release → Production ✅"
             echo ""
-            echo "- URL: ${{ steps.deploy.outputs.url }}"
-            echo "- Commit: \`${{ github.sha }}\`"
-            echo "- Smoke: passed"
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Source SHA | \`${{ steps.guard.outputs.verified_sha }}\` |"
+            echo "| Staging evidence | successful \`Deploy Staging\` run for this SHA |"
+            echo "| Approval | \`production\` environment gate |"
+            echo "| Deployment URL | ${{ steps.deploy.outputs.url }} |"
+            echo "| Post-release smoke | passed |"
+            echo "| Run | ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} |"
           } >> "$GITHUB_STEP_SUMMARY"
