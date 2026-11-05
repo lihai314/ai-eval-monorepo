@@ -25,7 +25,9 @@ def test_healthz_is_public(app_with_token):
 def test_dsn_hint_masks_password():
     from app.main import _dsn_hint
 
-    hint = _dsn_hint("postgresql://postgres.abc123:S3cr3t@aws-0-x.pooler.supabase.com:5432/postgres")
+    hint = _dsn_hint(
+        "postgresql://postgres.abc123:S3cr3t@aws-0-x.pooler.supabase.com:5432/postgres"
+    )
     assert "S3cr3t" not in hint
     assert hint.startswith("postgresql://postgres.abc123:***@aws-0-")
 

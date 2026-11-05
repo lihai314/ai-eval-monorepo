@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
-from ..protocols import EvalTask, Judge, ResultStore, SutClient, TaskQueue, verdict_for
+from ..protocols import EvalTask, Judge, verdict_for
 
 
 class MemoryQueue:

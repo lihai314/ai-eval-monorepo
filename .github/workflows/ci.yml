@@ -59,7 +59,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install --quiet -e "workers/eval[test]"
+      - run: python -m pip install --quiet -e "workers/eval[test,lint]"
+      - run: ruff check workers/eval/app workers/eval/tests
+      - run: ruff format --check workers/eval/app workers/eval/tests
       - run: python -m pytest workers/eval/tests -q
 
   build:
