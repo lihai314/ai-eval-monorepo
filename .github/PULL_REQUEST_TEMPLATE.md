@@ -4,8 +4,10 @@
 
 ## How to verify
 
-- [ ] `pnpm install --frozen-lockfile && pnpm test && pnpm build` passes locally
-- [ ] CI green: Lint / Unit / API / Build
+- [ ] `pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test && pnpm build` passes locally
+- [ ] CI green — all five required contexts on `main`: `Lint & Typecheck`, `Unit Tests (packages)`, `API Tests (web)`, `Worker Tests (Python)`, `Build`
+- [ ] Python worker: `cd workers/eval && uv run --extra test pytest -q`
+- [ ] Results belong to the latest head SHA (CI cancels superseded runs via `cancel-in-progress`)
 - [ ] Behavior checked on the Vercel preview URL (if UI or API changed)
 
 ## Pipeline impact
