@@ -1,24 +1,76 @@
 name: DB Migrate
 
 # Everything-as-code for the control plane: schema lives in
-# supabase/migrations/*.sql, and pushing to main applies them to the hosted
-# project automatically (like code deploy, but for the database).
-# Soft-skip until the project exists: the step that checks SUPABASE_DB_URL
-# documents why the run is a no-op in the job summary.
+# supabase/migrations/*.sql; pushing to main applies them to the hosted project.
+#
+# R-10: a missing SUPABASE_DB_URL must FAIL, never a green "skipped".
+# Only an explicitly requested, non-production dry-run may report SKIPPED,
+# and that state is written to the job summary as SKIPPED (not SUCCESS).
 
 on:
   push:
     branches: [main]
     paths:
       - "supabase/migrations/**"
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Explicit non-production dry-run (reports SKIPPED, never SUCCESS)"
+        required: false
+        default: "false"
+      target_env:
+        description: "Target environment label for the dry-run (must not be production)"
+        required: false
+        default: "local"
 
 concurrency:
   group: db-migrate
 
 jobs:
+  validate:
+    name: Validate migrations (PR)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static SQL checks
+        run: |
+          set -euo pipefail
+          count=0
+          for f in $(git ls-files 'supabase/migrations/*.sql'); do
+            base=$(basename "$f")
+            if [[ ! "$base" =~ ^[0-9]{4}_.+\.sql$ ]]; then
+              echo "::error::bad migration filename: $f"
+              exit 1
+            fi
+            if ! grep -q '[^[:space:]]' "$f"; then
+              echo "::error::empty migration: $f"
+              exit 1
+            fi
+            if grep -qiE 'drop[[:space:]]+table|truncate[[:space:]]+table|drop[[:space:]]+schema' "$f"; then
+              echo "::error::destructive DDL in $f"
+              exit 1
+            fi
+            count=$((count + 1))
+          done
+          if [ "$count" -eq 0 ]; then
+            echo "::error::no migration files found"
+            exit 1
+          fi
+          {
+            echo "## Migration static validation — PASSED"
+            echo ""
+            echo "- files: ${count}"
+            echo "- naming, non-empty, no destructive DDL"
+            echo "- empty-database apply requires a pgmq-enabled Supabase local stack (tracked separately)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   apply:
     name: Push migrations
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -26,18 +78,39 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      - name: Apply pending migrations
+
+      - name: Required config preflight
+        id: preflight
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          TARGET_ENV: ${{ inputs.target_env }}
         run: |
           set -uo pipefail
-          if [ -z "${SUPABASE_DB_URL:-}" ]; then
-            {
-              echo "## ⏭️ Migration push skipped"
-              echo ""
-              echo "Hosted Supabase project not provisioned yet (\`SUPABASE_DB_URL\` secret unset)."
-              echo "See README 'Supabase as code' for the one-time provisioning step."
-            } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${SUPABASE_DB_URL:-}" ]; then
+            echo "mode=apply" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          supabase db push --db-url "$SUPABASE_DB_URL" --include-all
+          if [ "${DRY_RUN:-false}" = "true" ] && [ "${TARGET_ENV:-local}" != "production" ]; then
+            {
+              echo "## Migration push — SKIPPED"
+              echo ""
+              echo "Explicit non-production dry-run (target=${TARGET_ENV:-local})."
+              echo "SUPABASE_DB_URL is not configured. **This is not a successful migration.**"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "## Migration push — FAILED"
+            echo ""
+            echo "Required secret SUPABASE_DB_URL is missing; no explicit non-production dry-run was requested."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::SUPABASE_DB_URL is required for a production migration"
+          exit 1
+
+      - name: Apply pending migrations
+        if: steps.preflight.outputs.mode == 'apply'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --include-all
