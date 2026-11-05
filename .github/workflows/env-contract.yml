@@ -1,0 +1,40 @@
+name: Env Contract
+
+# R-09: one machine-readable contract for every runtime env var. Any change
+# to .env.example, platform manifests, the schema or the checker is validated
+# in the PR, including negative tests that prove the checker actually fails.
+
+on:
+  pull_request:
+    paths:
+      - ".env.example"
+      - "infra/**"
+      - "scripts/lib/env-schema.mjs"
+      - "scripts/check-env-schema.mjs"
+      - ".github/workflows/env-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".env.example"
+      - "infra/**"
+      - "scripts/lib/env-schema.mjs"
+      - "scripts/check-env-schema.mjs"
+      - ".github/workflows/env-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Env Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate declarations
+        run: node scripts/check-env-schema.mjs
+      - name: Prove the checker rejects violations
+        run: node scripts/check-env-schema.mjs --self-test
