@@ -63,6 +63,8 @@ jobs:
             echo "- URL: ${{ steps.deploy.outputs.url }}"
             echo "- Commit: \`${{ github.sha }}\` (${GITHUB_SHA_SHORT})"
             echo "- Smoke: passed (version + health verified)"
+            echo "- Staging run ID: ${{ github.run_id }} (referenced by the Release Production guard)"
+            echo "- Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } >> "$GITHUB_STEP_SUMMARY"
         env:
           GITHUB_SHA_SHORT: ${{ github.sha }}
