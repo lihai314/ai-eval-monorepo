@@ -1,0 +1,76 @@
+name: Admin — Data repair (one-shot)
+
+# Controlled execution of the two production data repairs that cannot run from
+# an agent workstation: the DSN is injected by GitHub from a secret and never
+# printed. PREVIEW is the default; writing requires an explicit `apply=true`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "preview = dry-run backfill; backfill = close stuck runs; remove-corrected = delete one accidental sample"
+        required: true
+        type: choice
+        options:
+          - preview
+          - backfill
+          - remove-corrected
+        default: preview
+      item_id:
+        description: "Full UUID of the accidental corrected sample (remove-corrected only)"
+        required: false
+        default: ""
+      apply:
+        description: "Actually write. false = PREVIEW only (no DB writes)"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    name: Data repair (${{ inputs.action }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Preview or apply eval_runs backfill
+        if: inputs.action != 'remove-corrected'
+        env:
+          PG_DSN: ${{ secrets.SUPABASE_DB_URL }}
+          ACTION: ${{ inputs.action }}
+          APPLY: ${{ inputs.apply }}
+        run: |
+          set -euo pipefail
+          ARGS=""
+          if [ "$ACTION" = "backfill" ] && [ "$APPLY" = "true" ]; then
+            ARGS="--apply"
+          fi
+          pnpm tsx scripts/backfill-eval-runs.mts $ARGS
+
+      - name: Preview or remove accidental corrected sample
+        if: inputs.action == 'remove-corrected'
+        env:
+          PG_DSN: ${{ secrets.SUPABASE_DB_URL }}
+          ITEM_ID: ${{ inputs.item_id }}
+          APPLY: ${{ inputs.apply }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ITEM_ID:-}" ]; then
+            echo "::error::item_id is required for remove-corrected"
+            exit 1
+          fi
+          ARGS="--id=$ITEM_ID"
+          if [ "$APPLY" = "true" ]; then
+            ARGS="$ARGS --apply"
+          fi
+          pnpm tsx scripts/remove-corrected-sample.mts $ARGS
