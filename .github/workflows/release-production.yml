@@ -51,7 +51,7 @@ jobs:
           fi
           MATCHES=$(gh run list --repo "$REPO" --workflow "Deploy Staging" \
             --status success --limit 100 --json headSha,conclusion \
-            --jq --arg sha "$CONFIRM_SHA" '[.[] | select(.headSha == $sha and .conclusion == "success")] | length')
+            --jq "[.[] | select(.headSha == \"$HEAD_SHA\" and .conclusion == \"success\")] | length")
           if [ "${MATCHES:-0}" -lt 1 ]; then
             echo "::error::no successful Deploy Staging run for $CONFIRM_SHA — refusing to promote"
             exit 1
