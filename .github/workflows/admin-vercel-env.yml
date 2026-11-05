@@ -49,4 +49,7 @@ jobs:
           JEV_API_KEY: ${{ secrets.JEV_API_KEY }}
           CORRECTION_SECRET: ${{ secrets.CORRECTION_SECRET }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TRIAGE_TOKEN: ${{ secrets.TRIAGE_TOKEN }}
+          WORKER_URL: ${{ vars.WORKER_URL }}
+          EVAL_WORKER_TOKEN: ${{ secrets.EVAL_WORKER_TOKEN }}
         run: node scripts/reconcile-vercel-env.mjs

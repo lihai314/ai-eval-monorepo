@@ -11,6 +11,12 @@ export async function GET(): Promise<Response> {
     gitSha: process.env.GIT_SHA ?? "dev",
     gitBranch: process.env.GIT_BRANCH ?? "unknown",
     llmMode: process.env.OPENAI_API_KEY ? "live" : "mock",
+    // `llmMode` reports KEY PRESENCE only. It does not prove the provider
+    // subscription or quota is usable: a `400 InvalidSubscription` still makes
+    // every live call fail. `llmProbe` states that no model probe was run, so
+    // operators never read `live` as "model verified".
+    llmConfigured: Boolean(process.env.OPENAI_API_KEY),
+    llmProbe: "not-attempted",
     // Operability flags: both webhooks are secure-by-default when configured.
     triageAuth: process.env.TRIAGE_TOKEN ? "on" : "off",
     workerWired: Boolean(process.env.WORKER_URL),

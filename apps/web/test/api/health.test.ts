@@ -11,5 +11,8 @@ describe("GET /api/health", () => {
     expect(typeof body.gitSha).toBe("string");
     expect(body.gitSha.length).toBeGreaterThan(0);
     expect(["live", "mock"]).toContain(body.llmMode);
+    expect(body.llmConfigured).toBe(body.llmMode === "live");
+    // A configured key is not proof that the provider subscription works.
+    expect(body.llmProbe).toBe("not-attempted");
   });
 });
