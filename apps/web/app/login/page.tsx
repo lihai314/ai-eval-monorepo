@@ -13,18 +13,27 @@ function client() {
   return createBrowserClient(url, key);
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const githubConfigured = process.env.NEXT_PUBLIC_GITHUB_OAUTH === "1";
+  // #7: never send an empty or malformed address to the auth provider.
+  const emailOk = EMAIL_RE.test(email.trim());
 
   async function magicLink() {
+    if (!emailOk) {
+      setNote("请输入有效的邮箱地址");
+      return;
+    }
+    const normalized = email.trim();
     const { error } = await client().auth.signInWithOtp({
-      email,
+      email: normalized,
       options: { emailRedirectTo: `${location.origin}/auth/callback` },
     });
-    setNote(error ? error.message : `check your inbox: ${email}`);
+    setNote(error ? error.message : `check your inbox: ${normalized}`);
   }
 
   async function github() {
@@ -52,11 +61,11 @@ export default function LoginPage() {
           onChange={(e) => setEmail(e.target.value)}
           style={{ flex: 1, padding: 6 }}
         />
-        <button type="button" onClick={magicLink} disabled={!email.includes("@")}>
+        <button type="button" onClick={magicLink} disabled={!emailOk}>
           Email magic link
         </button>
       </div>
-      {note && <p style={{ color: "#555" }}>{note}</p>}
+      {note && <p style={{ color: "var(--muted)" }}>{note}</p>}
     </main>
   );
 }
