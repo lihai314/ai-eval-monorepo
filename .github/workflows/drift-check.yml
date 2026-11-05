@@ -108,10 +108,15 @@ jobs:
       - name: File or heal drift issue
         env:
           GH_TOKEN: ${{ github.token }}
-          DRIFT: "${{ steps.check.outputs.drift }} ${{ steps.envcheck.outputs.env_drift }}"
+          PLANE_DRIFT: ${{ steps.check.outputs.drift }}
+          ENV_DRIFT: ${{ steps.envcheck.outputs.env_drift }}
           MAIN: ${{ github.sha }}
         run: |
           set -uo pipefail
+          DRIFT="${PLANE_DRIFT:-}"
+          if [ -n "${ENV_DRIFT:-}" ]; then
+            DRIFT="${DRIFT:+$DRIFT }${ENV_DRIFT}"
+          fi
           OPEN=$(gh issue list --repo "$GITHUB_REPOSITORY" --label drift --state open --json number --jq '.[0].number // ""')
           if [ -n "$DRIFT" ]; then
             if [ -n "$OPEN" ]; then
