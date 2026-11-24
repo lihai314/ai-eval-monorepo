@@ -1,6 +1,6 @@
 /**
  * Eval gate runner: the PR's OWN prompt code, graded against triage-zh-v1.
- * In-process on purpose — production serves the LAST RELEASE, so HTTP-eval
+ * In-process on purpose — production serves the currently deployed commit, so HTTP-eval
  * would measure the wrong prompt (see #51).
  *
  * Usage: OPENAI_API_KEY=... SUPABASE_DB_URL=... pnpm tsx scripts/eval-gate.mts

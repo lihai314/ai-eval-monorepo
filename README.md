@@ -4,7 +4,7 @@
 executed by a queue-triggered Python worker (Render, httpx + DeepEval) against any SUT —
 starting with this repo's own issue-triage agent (dogfooding: every auto-triaged issue is
 potential eval data). Built *on* the full delivery chain
-**Issue → Branch → PR → CI(5 gates) → Merge → Staging → Smoke → Release → Production → Watchdog**,
+**Issue → short-lived branch → PR + CI/preview → Merge to main → Staging + Smoke → Production → Watchdog**,
 with everything-as-code: schema, services, auth config and drift proofs all live in this repo.
 
 📖 **Usage guide (login, running evals, troubleshooting): [docs/USAGE.md](docs/USAGE.md)** ·
@@ -22,7 +22,7 @@ supabase/         config.toml + migrations/ + seeds/ — the control plane, as c
 scripts/          smoke.mjs · auto-triage.mts · eval-gate.mts · drift/reconcile helpers
 infra/            env manifests (Vercel/Render as code, verified by drift-check)
 render.yaml       Blueprint definition for the eval worker (free web service)
-.github/          workflows (ci / deploy-staging / release-production / triage / db-migrate / drain-eval) + templates
+.github/          workflows (ci / deploy-main / triage / db-migrate / drain-eval) + templates
 docs/PIPELINE.md  stage-by-stage map of the pipeline
 docs/USAGE.md     end-user guide (Chinese): login, runs, watchdog, troubleshooting
 PLAN.md           product & architecture plan (v2.1)
@@ -71,15 +71,14 @@ pnpm smoke            # BASE_URL=https://... node scripts/smoke.mjs
 | Stage | Where it lives | Trigger |
 | --- | --- | --- |
 | Issue | `.github/ISSUE_TEMPLATE/` | human (agent now auto-classifies new issues: `triage.yml` → production `/api/triage`) |
-| Branch | `feat/<name>-<issue>` / `fix/<name>-<issue>` | human |
-| PR | `gh pr create` → checks + Vercel preview | human |
+| Branch | short-lived `feat/<issue>-<name>` / `fix/<issue>-<name>` from `main` | human; delete after merge |
+| PR | `gh pr create` → required checks + Vercel preview | human |
 | CI | `.github/workflows/ci.yml`: lint ∥ unit ∥ api → build | PR + push main |
-| Merge | squash-merge into protected `main` | after CI green |
+| Merge | squash-merge into protected `main`; no long-lived `develop` or `release` branches | after required checks and resolved conversations; review recommended |
 | Eval Gate | `.github/workflows/eval-gate.yml` | PR touching agent/** is scored against triage-zh-v1 in-process |
-| Staging Deploy | `.github/workflows/deploy-staging.yml` → Vercel `ai-eval-staging` | push main |
-| Smoke | `scripts/smoke.mjs` (health + exact-commit check) | part of staging job |
-| Release | `gh workflow run release-production.yml` + `production` environment gate | human |
-| Production | same workflow → Vercel `ai-eval-production` | after Release |
+| Staging + Smoke | `.github/workflows/deploy-main.yml` → Vercel `ai-eval-staging` | automatically on push to main |
+| Production | same workflow → Vercel `ai-eval-production`; deploys the exact smoke-tested commit | automatically after staging passes; optional GitHub environment approval |
+| Rollback | revert the bad merge through a PR | merged revert redeploys through the same pipeline |
 | Monitoring | `/api/health` identity reporting; Sentry/Langfuse land in P4 | continuous |
 
 Details, failure playbook, and what each stage teaches: **[docs/PIPELINE.md](docs/PIPELINE.md)**.
@@ -88,15 +87,21 @@ Details, failure playbook, and what each stage teaches: **[docs/PIPELINE.md](doc
 
 1. **Vercel projects**: `vercel project add ai-eval-staging && vercel project add ai-eval-production`,
    then apply settings: `VERCEL_API_TOKEN=... ./scripts/setup-vercel.sh`
-   (rootDirectory=apps/web, turbo build, SSO protection off for smoke access).
+   (rootDirectory=apps/web, turbo build, SSO protection off for smoke access). Connect the
+   staging project to GitHub for PR preview deployments; disable automatic production deploys
+   from Vercel Git integration so `.github/workflows/deploy-main.yml` remains the only production path.
 2. **GitHub repo secrets/vars** consumed by the workflows:
    - `VERCEL_TOKEN` (secret) — a `vcp_` **project** token from ai-eval-staging → Settings → Tokens
    - `VERCEL_TOKEN_PROD` (secret) — a second `vcp_` token from ai-eval-production → Settings → Tokens
      (project-scoped tokens can't deploy to the other project — learned the hard way in run 34855756577)
    - `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_STAGING`, `VERCEL_PROJECT_ID_PRODUCTION` (IDs, not sensitive)
-3. **Branch protection** on `main`: require CI checks (Lint, Unit, API, Worker, Build) to pass before merge.
-4. Optional hard gate: add required reviewers to the `production` **environment**
-   (Settings → Environments → production), turning "Release" into an approval.
+3. **Branch protection** on `main`: require PRs and CI checks (Lint, Unit, API, Worker, Build),
+   resolve all code conversations, and block force-pushes and branch deletion. Required approvals
+   remain at 0 while the repository has one direct collaborator; review is recommended but not enforced.
+   Use squash merge and delete short-lived branches after merge.
+4. Optional production safeguard: add required reviewers to the `production` **environment**
+   (Settings → Environments → production). Without reviewers, staging smoke success promotes
+   the same commit to production automatically.
 5. **Supabase project** (free tier, `supabase projects create` or dashboard):
    then set `SUPABASE_DB_URL` (session pooler connection string) as a repo secret —
    `db-migrate.yml` then auto-applies every merged migration; hand the pooler DSN to
