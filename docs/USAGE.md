@@ -67,12 +67,12 @@ gh workflow run "Drain Eval Queue"      # ✅ 唤醒 worker 并排空队列
 ## 3. 开发流程（万物皆代码）
 
 ```
-issue（含验收标准）→ 分支 feat|fix/<名>-<issue号> → PR（模板填验证/回滚）
-  → 五门禁：Lint&Typecheck ∥ Unit ∥ API(web) ∥ Worker(py) → Build
-  → squash merge 到受保护的 main
-  → 自动对账：staging 部署+smoke（版本断言）│ db-migrate（schema）│ Render 重建
-  → 需要上生产：gh workflow run "Release Production"（Release 卡点，人工）
-  → 部署后 smoke → 证据回写 issue → close
+issue（含验收标准）→ 从最新 main 开短期 feat|fix/<issue号>-<名> 分支
+  → PR（模板填验证/回滚）+ 五门禁：Lint&Typecheck ∥ Unit ∥ API(web) ∥ Worker(py) → Build
+  → Vercel Preview 验证 + 对话解决（当前单协作者不强制审批）→ squash merge 到受保护的 main → 删除分支
+  → 自动部署 staging + smoke（版本断言）│ db-migrate（schema）│ Render 重建
+  → staging smoke 通过后，自动将同一 commit 部署 production + smoke
+  → 证据回写 issue → close；回滚通过 revert PR 并走同一发布链
 ```
 
 本地：
@@ -91,13 +91,13 @@ cd workers/eval && uv run --extra test pytest   # Python worker 测试
 | 表结构/策略 | `supabase/migrations/00NN_*.sql` 新文件 | merge 即自动 `db push`；**禁止 dashboard 手改**（看门狗会报漂移） |
 | 队列消息格式 | `packages/db/src/task-message.ts` **和** `workers/eval/app/protocols.py` 同一 PR | 两侧测试同时改，CI 强制 |
 | worker 逻辑 | `workers/eval/**`（pytest 是第五门禁） | merge 后 Render 自动重建（build 时烘焙 commit） |
-| 前端/BFF | `apps/web` + `packages/*` | merge→staging→smoke→点 Release |
+| 前端/BFF | `apps/web` + `packages/*` | PR preview→merge→staging smoke→自动 production |
 | 评测判分语义 | `packages/db`（TS 断言）/ `workers/eval/app/adapters`（Python judge） | 同上 |
 | 密钥 | 平台 secret store（Vercel/Render/GitHub Secrets） | 仓库里只出现**名字**（render.yaml `sync:false`、workflow `${{ secrets.X }}`） |
 
 ## 5. 看门狗（drift-check.yml，每日 07:20 UTC）
 
-断言并写进运行摘要：production == 最后一次成功 Release；staging == main；
+断言并写进运行摘要：production == main；staging == main；
 worker == 最后一次触碰 `workers/` 的提交；migrations 本地远端零差异。
 失配 → 自动开 `drift` label issue（去重、持续漂移追加评论）；恢复 → 自动评论并关闭。
 手动跑：`gh workflow run "Drift Watchdog"`。它同时是 Supabase 保活（防 7 天休眠）。
@@ -132,9 +132,9 @@ worker == 最后一次触碰 `workers/` 的提交；migrations 本地远端零�
 | `/api/corrections` 返回 503 | `CORRECTION_SECRET` | 未配置即拒绝写入（fail closed） |
 | run 一直 pending | `/api/health` 的 `workerWired`；worker `/healthz` | `WORKER_URL` 未配/唤醒失败（cron 兜底）；worker 冷启动 ~1min |
 | drain 502 | 502 的 detail 自带原因 | 之前真实案例：密码串复制进 `%`、jsonb 双重编码 |
-| 看门狗开 issue | 该 run 的 summary 表 | 真旁路部署/dashboard 改库；或 Release 没点（prod 落后是**预期**，基线已处理） |
+| 看门狗开 issue | 该 run 的 summary 表 | 真旁路部署/dashboard 改库；或自动部署失败导致 production 落后 |
 | CI 红 | `gh pr checks <n>` | 五门禁逐 job 看日志 |
-| staging 部署失败 | Actions → Deploy Staging | `VERCEL_TOKEN`（staging 项目级 vcp_）过期/被轮换 |
+| staging 部署失败 | Actions → Deploy Main | `VERCEL_TOKEN`（staging 项目级 vcp_）过期/被轮换 |
 
 ## 8. 当前边界（诚实清单）
 

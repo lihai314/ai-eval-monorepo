@@ -2,7 +2,7 @@ name: Eval Gate
 
 # The automated version of the #49 experiment: a PR that touches the agent or
 # its contracts gets scored against triage-zh-v1 using the PR's OWN prompt
-# code (in-process — production serves the last release, so HTTP-eval would
+# code (in-process — production serves the currently deployed commit, so HTTP-eval would
 # measure the wrong thing). Red below GATE_MIN_SCORE, report always posted.
 
 on:

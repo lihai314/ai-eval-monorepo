@@ -101,7 +101,7 @@ release 通过 ◀── eval-gate 绿 ◀── eval run（队列异步、并�
       └── 新 production 样本 ─────────────┘（每次上线都在扩大下一轮数据集）
 ```
 
-## 6. 实施阶段（每步走既有 pipeline，CI→staging→smoke→release→prod 才算完成）
+## 6. 实施阶段（每步走既有 GitHub Flow：PR→CI/preview→main→staging→smoke→prod）
 
 - **P1 · 真实 LLM**：给 production/staging 配 `OPENAI_API_KEY/BASE_URL/TRIAGE_MODEL`（推荐 Gemini 免费层，OpenAI 兼容端点），`llmMode` 变 live。**当前一切评测的前提。**
 - **P2 · Supabase 基座**：`supabase init` + 首个 migration（§3 schema）+ GitHub OAuth 登录 + 控制台外壳（布局/导航/会话）。
@@ -123,7 +123,7 @@ release 通过 ◀── eval-gate 绿 ◀── eval run（队列异步、并�
 
 ## 8. 既有资产继承清单
 
-✅ 交付链路（issue→PR→CI→staging→smoke→release→production）→ 成为平台的 CI/CD
+✅ 交付链路（issue→短期分支→PR→CI→main→staging→smoke→production）→ 成为平台的 CI/CD
 ✅ auto-triage 循环（#11–13 已验证）→ 成为 `/live` 的流量入口与 eval 首个被测 agent
 ✅ packages/shared zod 契约 + packages/agent（LlmClient 接缝/白名单/幂等）→ eval 的评分对象
 ✅ 15 个 Vitest + PR/issue 模板 + 标签词表 → 随 P2–P6 扩张

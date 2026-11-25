@@ -4,8 +4,8 @@ The chain this repo is built to teach. Every stage lists: **what runs it**, **wh
 and **the lesson it teaches** for agent development.
 
 ```
-GitHub Issue → Branch → Pull Request → CI (lint ∥ unit ∥ api → build) → Merge
-→ main → Staging Deploy → Smoke → Release → Production → Monitoring
+GitHub Issue → short-lived branch → Pull Request + CI + Preview → Merge to main
+→ Staging Deploy → Smoke → Production Deploy → Monitoring
 ```
 
 ## Stage by stage
@@ -20,13 +20,17 @@ GitHub Issue → Branch → Pull Request → CI (lint ∥ unit ∥ api → build
   pattern to copy everywhere. Future "monitoring failure → auto-filed issue" reuses this loop.
 
 ### Branch
-- **Convention**: `feat/<name>-<issue#>` / `fix/<name>-<issue#>` off `main`.
-- **Lesson**: naming is machine-parseable context — later automation infers issue links from it.
+- **Convention**: create a short-lived `feat/<issue#>-<name>` / `fix/<issue#>-<name>` branch
+  from the latest `main`; keep one focused change per branch. Do not maintain `develop`,
+  `release/*`, or `hotfix/*` integration branches.
+- **After merge**: delete the branch; start follow-up work from the updated `main`.
+- **Lesson**: `main` stays releasable, while every change is integrated through a small PR.
 
 ### Pull Request
-- **Runs it**: `gh pr create`. Vercel (once Git integration is enabled) adds a preview deploy
-  as a free extra pre-merge environment.
-- **Passing means**: PR template filled (verify steps + pipeline impact + rollback plan).
+- **Runs it**: `gh pr create`; CI and the Vercel Git integration's preview deployment run before merge.
+- **Passing means**: required CI checks pass and all code conversations are resolved; review is
+  recommended but approval is not required while the repository has one direct collaborator.
+  Complete the PR template's verify, pipeline impact, and rollback sections.
 - **Lesson**: the "Pipeline impact" checkbox on *touches prompts/models* is the hook where the
   future Agent Evaluation gate will hang.
 
@@ -38,29 +42,31 @@ GitHub Issue → Branch → Pull Request → CI (lint ∥ unit ∥ api → build
   a pure function of (input, LlmClient), which is exactly what makes batch-2 evals cheap to run.
 
 ### Merge → main
-- **Runs it**: squash merge; `main` is the deploy source of truth.
-- **Lesson**: one trunk, one source of truth → any deployed artifact maps to exactly one commit.
+- **Runs it**: squash merge after required checks pass and code conversations are resolved; delete
+  the short-lived branch. Review is recommended but not enforced with one direct collaborator.
+- **Passing means**: `main` remains protected and deployable; no release branch or manual release
+  command is needed.
+- **Lesson**: one trunk, one source of truth → every deployed artifact maps to exactly one commit.
 
-### Staging Deploy — `.github/workflows/deploy-staging.yml`
-- **Runs it**: auto on push to `main`; `vercel deploy --prod` into `ai-eval-staging`
+### Staging Deploy — `.github/workflows/deploy-main.yml`
+- **Runs it**: automatically on push to `main`; `vercel deploy --prod` into `ai-eval-staging`
   (cloud build via root `vercel.json`; `GIT_SHA` baked into the bundle).
 - **Lesson**: deploy must carry identity — the build reports which commit it *is*.
 
 ### Smoke — `scripts/smoke.mjs`
 - **Runs it**: immediately after staging deploy, inside the same workflow.
-- **Passing means**: `/api/health` returns `status: ok` **and** `gitSha == released SHA`
+- **Passing means**: `/api/health` returns `status: ok` **and** `gitSha == deployed commit SHA`
   (catches "deployed, but served a stale build").
 - **Lesson**: a smoke gate is a *version assertion*, not a ping.
 
-### Release — `workflow_dispatch` on `release-production.yml`
-- **Runs it**: human click (`gh workflow run Release\ Production`). Bound to the `production`
-  GitHub environment; add required reviewers there to make it an approval gate.
-- **Passing means**: dispatch accepted with the SHA that passed staging.
-- **Lesson**: production is never automatic in a learning loop — blast radius control first.
-
-### Production
-- **Runs it**: same workflow, deploying to `ai-eval-production`, followed by post-release smoke.
-- **Lesson**: prod = staging + 1 (identical artifact, different project/env vars).
+### Production Deploy
+- **Runs it**: the production job in `.github/workflows/deploy-main.yml` runs only after the
+  staging deploy and exact-commit smoke test pass. It deploys the same `github.sha` to
+  `ai-eval-production`, then runs a production smoke test.
+- **Safeguard**: the `production` GitHub environment can require reviewers if a human approval
+  gate is desired; otherwise promotion is automatic.
+- **Rollback**: open a PR that reverts the bad merge. Once merged, the revert follows this same
+  staging → smoke → production path.
 
 ### Monitoring
 - **Now**: `/api/health` identity reporting + smoke evidence in every workflow run summary.
@@ -75,14 +81,13 @@ GitHub Issue → Branch → Pull Request → CI (lint ∥ unit ∥ api → build
 | PR checks red | CI | `gh pr checks <n>` → failing job log |
 | Staging deploy fails | Actions | check `VERCEL_TOKEN`/project IDs secrets; read workflow log |
 | Smoke FAIL (version mismatch) | Actions | usually stale build → re-run deploy job; else rollback |
-| Prod regression | Monitoring | redeploy previous main commit: `git revert` → fast PR → Release |
+| Prod regression | Monitoring | `git revert` → PR → merge; the revert automatically redeploys |
 
 Useful commands:
 
 ```bash
-gh run list --workflow "Deploy Staging" --limit 5   # pipeline history
+gh run list --workflow "Deploy Main" --limit 5       # staging + production history
 gh run watch                                          # tail the current run
-gh workflow run "Release Production"                  # the Release button from the CLI
 node scripts/smoke.mjs                                # BASE_URL=... GIT_SHA=... locally
 ```
 
