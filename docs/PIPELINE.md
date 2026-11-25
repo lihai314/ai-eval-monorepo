@@ -28,24 +28,26 @@ GitHub Issue → short-lived branch → Pull Request + CI + Preview → Merge to
 
 ### Pull Request
 - **Runs it**: `gh pr create`; CI and the Vercel Git integration's preview deployment run before merge.
-- **Passing means**: required CI checks pass and all code conversations are resolved; review is
-  recommended but approval is not required while the repository has one direct collaborator.
-  Complete the PR template's verify, pipeline impact, and rollback sections.
-- **Lesson**: the "Pipeline impact" checkbox on *touches prompts/models* is the hook where the
-  future Agent Evaluation gate will hang.
+- **Passing means**: all five CI contexts and the separate required `PR Governance` context pass;
+  all code conversations are resolved. Review is recommended but approval is not required while
+  the repository has one direct collaborator. The governance check validates What, verification,
+  risk/rollback, and an issue reference or `NO-ISSUE`.
+- **Lesson**: the "Pipeline impact" checkbox documents prompt/model changes; the Eval Gate is
+  triggered by its workflow path filters, not by the checkbox.
 
 ### CI — `.github/workflows/ci.yml`
 - **Runs it**: every PR and every push to `main`.
-- **Shape**: `lint & typecheck` ∥ `unit (packages/*)` ∥ `api (web route handlers)` → `build`.
-- **Passing means**: all four jobs green; `main` is protected to require them.
+- **Shape**: `lint & typecheck` ∥ `unit (packages/*)` ∥ `api (web route handlers)` ∥ `worker (Python)` → `build`.
+- **Passing means**: all five CI contexts are green. Together with the separately required
+  `PR Governance` context, `main` currently protects six required contexts.
 - **Lesson**: API tests import route handlers directly (no server, no network) — agent code stays
   a pure function of (input, LlmClient), which is exactly what makes batch-2 evals cheap to run.
 
 ### Merge → main
-- **Runs it**: squash merge after required checks pass and code conversations are resolved; delete
+- **Runs it**: squash-merge after required checks pass and code conversations are resolved; delete
   the short-lived branch. Review is recommended but not enforced with one direct collaborator.
-- **Passing means**: `main` remains protected and deployable; no release branch or manual release
-  command is needed.
+- **Passing means**: `main` remains protected by six required contexts (five CI contexts plus
+  `PR Governance`) and deployable; no release branch or manual release command is needed.
 - **Lesson**: one trunk, one source of truth → every deployed artifact maps to exactly one commit.
 
 ### Staging Deploy — `.github/workflows/deploy-main.yml`
@@ -63,15 +65,15 @@ GitHub Issue → short-lived branch → Pull Request + CI + Preview → Merge to
 - **Runs it**: the production job in `.github/workflows/deploy-main.yml` runs only after the
   staging deploy and exact-commit smoke test pass. It deploys the same `github.sha` to
   `ai-eval-production`, then runs a production smoke test.
-- **Safeguard**: the `production` GitHub environment can require reviewers if a human approval
-  gate is desired; otherwise promotion is automatic.
+- **Safeguard**: the `production` GitHub environment currently requires reviewer approval, so the
+  production job pauses after staging smoke until that approval is granted.
 - **Rollback**: open a PR that reverts the bad merge. Once merged, the revert follows this same
   staging → smoke → production path.
 
 ### Monitoring
-- **Now**: `/api/health` identity reporting + smoke evidence in every workflow run summary.
-- **Next (P4)**: Sentry (errors), Langfuse (LLM traces/scores), daily cron smoke (also keeps the
-  free Supabase project awake).
+- **Now**: `/api/health` identity reporting; staging/production post-deploy smoke; daily Drift
+  Watchdog checks for deploy, worker, environment, and migration drift; 30-minute worker-drain cron.
+- **Not wired yet**: Sentry, OpenTelemetry, and Langfuse tracing/score export.
 - **Lesson**: monitoring is the input to batch-2 Automatic Rollback and Automatic Issue.
 
 ## Failure playbook
@@ -91,17 +93,18 @@ gh run watch                                          # tail the current run
 node scripts/smoke.mjs                                # BASE_URL=... GIT_SHA=... locally
 ```
 
-## Batch 2 backlog (stubbed, in build order)
+## Batch 2 backlog and status (in build order)
 
-1. **Agent Evaluation** — dataset + graders live in `packages/agent` (subset grader) and
-   `workers/eval` (Python judges); extra CI job that runs when
-   `packages/agent/**/prompt*` or model config changes; gate on regression vs baseline.
-   Dataset seeds itself from live triage verdicts + human label corrections (#5 shipped).
-2. **Trace** — Langfuse wrapper around `LlmClient` (the seam in `packages/agent/src/llm.ts`
-   was designed for exactly this: one interface, full observability).
-3. **Automatic Issue** ✅ triage half — opened issues → production agent → labels + comment
-   (`triage.yml`, #5). Remaining half: on smoke/monitor failure, auto-file an issue with run
-   context (`gh issue create` from a workflow), which then flows through its own triage.
+1. **Agent Evaluation — shipped** — `eval-gate.yml` runs against `triage-zh-v1` when
+   `packages/agent/**`, `packages/shared/**`, or `scripts/eval-gate.mts` changes. Missing LLM key
+   produces an explicit `SKIPPED` report. The workflow is not one of the six required branch
+   protection contexts, so it is not currently a merge-blocking gate.
+2. **Trace — not implemented** — add the Sentry/OTel/Langfuse integration around `LlmClient` and
+   carry `run_id`/`item_id` across API, queue, worker, and SUT spans.
+3. **Automatic Issue — partial** — the daily Drift Watchdog already files/deduplicates issues on
+   detected deployment, worker, environment, or migration drift. Remaining: create an issue
+   immediately for failed post-deploy smoke or drain/monitor runs, with the run context, then let
+   the existing triage workflow classify it.
 4. **Nightly Regression** — cron → eval suite + smoke; trend written to Supabase.
 5. **Queue Monitoring** — when triage moves behind a queue (Vercel cron/Blob or Supabase queue):
    depth + oldest-job-age on `/api/health`.

@@ -165,7 +165,7 @@ worker == 最后一次触碰 `workers/` 的提交；migrations 本地远端零�
 
 | 控制 | 状态 |
 |---|---|
-| 五项 CI required contexts（Lint & Typecheck / Unit / API / Worker / Build） | 强制，`strict=true` |
+| 五项 CI required contexts（Lint & Typecheck / Unit / API / Worker / Build；另加下行 PR Governance，共六项） | 强制，`strict=true` |
 | `PR Governance`（`.github/workflows/pr-governance.yml`） | 强制校验 PR 描述的 What / 验证 / 风险与回滚 / issue 关联 |
 | `enforce_admins` | 开启：管理员同样受上述检查约束，不再有 `--admin` 绕过 |
 | `required_approving_review_count` | 0：不保留无法生效的假门禁 |

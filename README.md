@@ -22,7 +22,7 @@ supabase/         config.toml + migrations/ + seeds/ — the control plane, as c
 scripts/          smoke.mjs · auto-triage.mts · eval-gate.mts · drift/reconcile helpers
 infra/            env manifests (Vercel/Render as code, verified by drift-check)
 render.yaml       Blueprint definition for the eval worker (free web service)
-.github/          workflows (ci / deploy-main / triage / db-migrate / drain-eval) + templates
+.github/          workflows (ci / pr-governance / eval-gate / deploy-main / drift-check / triage / db-migrate / drain-eval) + templates
 docs/PIPELINE.md  stage-by-stage map of the pipeline
 docs/USAGE.md     end-user guide (Chinese): login, runs, watchdog, troubleshooting
 PLAN.md           product & architecture plan (v2.1)
@@ -72,14 +72,14 @@ pnpm smoke            # BASE_URL=https://... node scripts/smoke.mjs
 | --- | --- | --- |
 | Issue | `.github/ISSUE_TEMPLATE/` | human (agent now auto-classifies new issues: `triage.yml` → production `/api/triage`) |
 | Branch | short-lived `feat/<issue>-<name>` / `fix/<issue>-<name>` from `main` | human; delete after merge |
-| PR | `gh pr create` → required checks + Vercel preview | human |
-| CI | `.github/workflows/ci.yml`: lint ∥ unit ∥ api → build | PR + push main |
-| Merge | squash-merge into protected `main`; no long-lived `develop` or `release` branches | after required checks and resolved conversations; review recommended |
-| Eval Gate | `.github/workflows/eval-gate.yml` | PR touching agent/** is scored against triage-zh-v1 in-process |
+| PR | `gh pr create` → six required contexts (five CI contexts + PR Governance) and Vercel preview | human |
+| CI | `.github/workflows/ci.yml`: lint ∥ unit ∥ API ∥ worker → build | PR + push main |
+| Merge | squash-merge into protected `main`; no long-lived `develop` or `release` branches | after required checks and resolved conversations; approval not required, review recommended |
+| Eval Gate | `.github/workflows/eval-gate.yml` | matching agent/shared paths are scored against `triage-zh-v1`; explicit SKIPPED if the key is absent; not a required merge context |
 | Staging + Smoke | `.github/workflows/deploy-main.yml` → Vercel `ai-eval-staging` | automatically on push to main |
-| Production | same workflow → Vercel `ai-eval-production`; deploys the exact smoke-tested commit | automatically after staging passes; optional GitHub environment approval |
-| Rollback | revert the bad merge through a PR | merged revert redeploys through the same pipeline |
-| Monitoring | `/api/health` identity reporting; Sentry/Langfuse land in P4 | continuous |
+| Production | same workflow → Vercel `ai-eval-production`; deploys the exact smoke-tested commit | after staging passes and the required production reviewer approves |
+| Rollback | revert the bad merge through a PR | merged revert redeploys through the same pipeline; automatic rollback is not implemented |
+| Monitoring | `/api/health` identity, deploy smoke, daily Drift Watchdog, and 30-minute worker-drain heartbeat | continuous/scheduled; Sentry/OTel/Langfuse are not yet wired |
 
 Details, failure playbook, and what each stage teaches: **[docs/PIPELINE.md](docs/PIPELINE.md)**.
 
@@ -95,13 +95,13 @@ Details, failure playbook, and what each stage teaches: **[docs/PIPELINE.md](doc
    - `VERCEL_TOKEN_PROD` (secret) — a second `vcp_` token from ai-eval-production → Settings → Tokens
      (project-scoped tokens can't deploy to the other project — learned the hard way in run 34855756577)
    - `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_STAGING`, `VERCEL_PROJECT_ID_PRODUCTION` (IDs, not sensitive)
-3. **Branch protection** on `main`: require PRs and CI checks (Lint, Unit, API, Worker, Build),
-   resolve all code conversations, and block force-pushes and branch deletion. Required approvals
-   remain at 0 while the repository has one direct collaborator; review is recommended but not enforced.
-   Use squash merge and delete short-lived branches after merge.
-4. Optional production safeguard: add required reviewers to the `production` **environment**
-   (Settings → Environments → production). Without reviewers, staging smoke success promotes
-   the same commit to production automatically.
+3. **Branch protection** on `main`: require PRs and all six contexts — `Lint & Typecheck`,
+   `Unit Tests (packages)`, `API Tests (web)`, `Worker Tests (Python)`, `Build`, and `PR Governance`;
+   resolve code conversations and block force-pushes/deletion. Required approvals remain at 0 for
+   the single-maintainer repository; `enforce_admins` is enabled, so administrators must also pass
+   the checks. Use squash merge and delete short-lived branches after merge.
+4. **Production approval**: the `production` GitHub environment currently requires a reviewer.
+   After staging smoke succeeds, production promotion waits for approval (Settings → Environments → production).
 5. **Supabase project** (free tier, `supabase projects create` or dashboard):
    then set `SUPABASE_DB_URL` (session pooler connection string) as a repo secret —
    `db-migrate.yml` then auto-applies every merged migration; hand the pooler DSN to
@@ -114,8 +114,10 @@ Details, failure playbook, and what each stage teaches: **[docs/PIPELINE.md](doc
 
 ## Roadmap
 
-Batch 1 (this repo): pipeline skeleton ✅.
-Batch 2 (next, tracked in docs/PIPELINE.md): Agent Evaluation gate · Queue Monitoring ·
-Trace (Langfuse) · Automatic Rollback · Automatic Issue · Nightly Regression.
+Batch 1 (this repo): pipeline skeleton ✅. Agent Evaluation gate ✅ (path-triggered; informational, not a required branch-protection context).
+Batch 2 remaining (tracked in [docs/PIPELINE.md](docs/PIPELINE.md)): Trace (Sentry/OTel/Langfuse) ·
+Automatic Issue on deployment/monitor failures (drift issues already auto-file) · Nightly Regression ·
+Queue Monitoring · Automatic Rollback.
+P7 polish (see [PLAN.md](PLAN.md) §6): run comparison · Supabase Storage exports · dashboard score trends.
 LLM provider is env-only (`OPENAI_API_KEY` / `OPENAI_BASE_URL` / `TRIAGE_MODEL`) —
 flip `llmMode` from `mock` to `live` without touching code.
